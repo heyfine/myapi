@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, usd } from "@/lib/client-utils";
 import TrendChart, { type DailyPoint } from "@/components/TrendChart";
@@ -29,13 +29,47 @@ function fmt(n: number): string {
   return n.toLocaleString("zh-CN");
 }
 
+/** 轮询间隔：人眼看不出 5s 差距，再短就会让 VChart 反复重绘 */
+const POLL_INTERVAL = 5000;
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [modelFilter, setModelFilter] = useState("");
+  const seqRef = useRef(0);
 
+  // 5s 轮询：不可见时跳过（后台标签不白烧）；请求序号保证只有最新一次响应能落状态（防慢响应把数字改回去）
   useEffect(() => {
-    api<Stats>("/api/stats").then(setStats).catch((e) => setError(e.message));
+    let alive = true;
+
+    function load(): void {
+      if (document.visibilityState !== "visible") return;
+      const seq = ++seqRef.current;
+      api<Stats>("/api/stats")
+        .then((data) => {
+          if (!alive || seq !== seqRef.current) return;
+          setStats(data);
+          setUpdatedAt(new Date());
+          setError("");
+        })
+        .catch((e: Error) => {
+          if (!alive || seq !== seqRef.current) return;
+          setError(e.message);
+        });
+    }
+
+    load();
+    const timer = setInterval(load, POLL_INTERVAL);
+    function onVisibilityChange(): void {
+      if (document.visibilityState === "visible") load();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   const filteredModels = (stats?.allModels ?? []).filter((m) =>
@@ -69,8 +103,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">仪表盘</h1>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-xl font-bold">仪表盘</h1>
+        <div className="text-xs text-gray-400">
+          {error && stats
+            ? "刷新失败，保留上次数据"
+            : `每 ${POLL_INTERVAL / 1000} 秒自动刷新${updatedAt ? ` · 更新于 ${updatedAt.toLocaleTimeString("zh-CN", { hour12: false })}` : ""}`}
+        </div>
+      </div>
+      {error && !stats && <div className="text-red-600 text-sm">{error}</div>}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
           <div key={c.label} className="card border-l-4" style={{ borderLeftColor: c.accent }}>

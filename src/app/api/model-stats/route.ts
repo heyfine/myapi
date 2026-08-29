@@ -30,7 +30,8 @@ export async function GET(req: Request) {
       cachedTokens: sql<number>`coalesce(sum(cached_tokens), 0)`,
       reasoningTokens: sql<number>`coalesce(sum(reasoning_tokens), 0)`,
       thinkingTokens: sql<number>`coalesce(sum(thinking_tokens), 0)`,
-      detailMissing: sql<number>`sum(case when status = 200 and has_usage_details = 0 and usage_source = 1 then 1 else 0 end)`,
+      // 与 /api/stats 同口径：不限制 usage_source，否则迁移前写入的成功调用（usage_source=0）漏算
+      detailMissing: sql<number>`sum(case when status = 200 and has_usage_details = 0 then 1 else 0 end)`,
       estimatedCount: sql<number>`sum(case when status = 200 and usage_source = 2 then 1 else 0 end)`,
     })
     .from(logs)
