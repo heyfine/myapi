@@ -39,6 +39,29 @@ npm run build     # 只需构建一次
 npm start         # 以后每次用这条启动
 ```
 
+### 方式三：Docker 部署（推荐服务器使用）
+
+仓库内置多阶段 `Dockerfile` 与 `docker-compose.yml`，构建即所得，无需手动装 Node 环境：
+
+```bash
+# 方式 A：docker compose（推荐）
+GATEWAY_SECRET=你的强随机密钥 docker compose up -d --build
+
+# 方式 B：纯 docker
+docker build -t myapi:latest .
+docker run -d --name llm-gateway --restart unless-stopped \
+  -p 3777:3777 -v /你的数据目录:/app/data \
+  -e GATEWAY_SECRET=你的强随机密钥 myapi:latest
+```
+
+部署要点：
+
+- **首次启动自动建库**（种子管理员 admin/admin123、默认定价与重试规则），无需手动 `db:init`
+- **数据持久化**：宿主机目录挂载到容器 `/app/data`（数据库在里面），升级镜像不丢数据
+- 换新镜像后如需补数据库迁移：`docker compose exec myapi npx tsx scripts/init-db.ts`（幂等，只补缺失列）
+- 停止：`docker compose down`；查看日志：`docker compose logs -f`
+- 反向代理用 Nginx/Caddy 时，**流式响应记得关缓冲**：`proxy_buffering off;`
+
 ### 注意事项
 
 - 所有数据保存在 `data\gateway.db`，重启服务不丢数据；换电脑用"备份还原"页面迁移
