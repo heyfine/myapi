@@ -48,3 +48,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # GHCR 新包默认私有，发布后自动改为 public（否则别人无法 docker pull）
+      - name: Set package visibility to public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for pkg in "repos/${{ github.repository }}/packages/container/${{ github.event.repository.name }}" "user/packages/container/${{ github.repository }}"; do
+            echo "尝试: $pkg"
+            gh api "$pkg/visibility" --method PATCH -f visibility=public && { echo "已设为 public"; break; } || echo "该端点失败，试下一个"
+          done
