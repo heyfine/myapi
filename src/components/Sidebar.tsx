@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import AccountSettingsModal from "./AccountSettingsModal";
 
 type Props = {
   user: { username: string; role: string; quota: number };
@@ -25,6 +27,7 @@ export function quotaToDisplay(quota: number) {
 export default function Sidebar({ user }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showAccount, setShowAccount] = useState(false);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -74,13 +77,23 @@ export default function Sidebar({ user }: Props) {
             </div>
           </div>
         </div>
-        <button
-          onClick={logout}
-          className="mt-3 text-xs text-gray-400 hover:text-rose-500 transition-colors cursor-pointer"
-        >
-          退出登录
-        </button>
+        <div className="flex items-center gap-3 mt-3 text-xs">
+          <button
+            className="text-gray-400 hover:text-indigo-600 transition-colors cursor-pointer"
+            onClick={() => setShowAccount(true)}
+          >
+            账号设置
+          </button>
+          <span className="text-gray-300">|</span>
+          <button
+            onClick={logout}
+            className="text-gray-400 hover:text-rose-500 transition-colors cursor-pointer"
+          >
+            退出登录
+          </button>
+        </div>
       </div>
+      {showAccount && <AccountSettingsModal currentUsername={user.username} onClose={() => setShowAccount(false)} />}
     </aside>
   );
 }

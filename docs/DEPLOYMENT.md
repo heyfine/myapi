@@ -20,7 +20,32 @@
 4. 数据迁移：旧机管理后台"备份还原"导出 JSON → 新机导入（整库覆盖，渠道 Key 自动用新机 GATEWAY_SECRET 重加密）
 5. 登录后**立即修改 admin 密码**
 
-## 上 VPS（推荐的生产方式）
+## Docker 部署（容器化，推荐的服务器方式）
+
+仓库内已提供 `Dockerfile`（多阶段构建）、`docker-compose.yml`、`docker-entrypoint.sh`：
+
+```bash
+# 方式一：docker compose（推荐，自动挂载 ./data 数据卷）
+GATEWAY_SECRET=你的强随机密钥 docker compose up -d --build
+
+# 方式二：纯 docker
+docker build -t myapi .
+docker run -d --name llm-gateway -p 3777:3777 \
+  -v /你的数据目录:/app/data \
+  -e GATEWAY_SECRET=你的强随机密钥 \
+  myapi
+```
+
+要点：
+
+- 数据持久化：宿主机目录挂载到 `/app/data`（gateway.db 在里面），升级镜像不丢数据
+- 首次启动 entrypoint 自动执行数据库初始化（建表 + 种子管理员 admin/admin123 + 默认定价/重试规则）
+- 健康检查：容器内置 HEALTHCHECK（探测 /login）
+- 流式响应用 Nginx 反代时记得 `proxy_buffering off;`
+- 验证：`docker logs -f llm-gateway` 看启动日志，浏览器开 `http://服务器IP:3777`
+- 数据库迁移到容器：把旧机的 data/gateway.db 拷进挂载目录即可（或用备份还原页面导入）
+
+## 上 VPS（直跑方式，不用 Docker）
 
 1. Linux + Node 24：克隆仓库 → `npm install` → `npm run db:init` → `npm run build`
 2. 进程守护：`pm2 start npm --name myapi -- start`（或 systemd）

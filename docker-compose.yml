@@ -1,0 +1,12 @@
+services:
+  myapi:
+    build: .
+    container_name: llm-gateway
+    ports:
+      - "3777:3777"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # 生产环境务必换成强随机值；更换后已保存的渠道密钥需重新填写
+      - GATEWAY_SECRET=${GATEWAY_SECRET:-please-change-me-to-a-long-random-string}
+    restart: unless-stopped

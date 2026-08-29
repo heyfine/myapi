@@ -35,6 +35,7 @@ export const tokens = sqliteTable(
     userId: integer("user_id").notNull(),
     name: text("name").notNull(),
     keyHash: text("key_hash").notNull().unique(), // SHA-256(sk-key)
+    keyEnc: text("key_enc").notNull().default(""), // 加密存储的完整 Key（旧令牌为空，无法取回）
     keyPrefix: text("key_prefix").notNull(), // 展示用前缀 sk-xxxx
     quotaLimit: integer("quota_limit").notNull().default(0), // 0 = 不限
     usedQuota: integer("used_quota").notNull().default(0),

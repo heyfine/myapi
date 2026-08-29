@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tokens (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   key_hash TEXT NOT NULL UNIQUE,
+  key_enc TEXT NOT NULL DEFAULT '',
   key_prefix TEXT NOT NULL,
   quota_limit INTEGER NOT NULL DEFAULT 0,
   used_quota INTEGER NOT NULL DEFAULT 0,
@@ -133,6 +134,14 @@ if (!logCols.includes("usage_source")) {
   db.exec("ALTER TABLE logs ADD COLUMN usage_source INTEGER NOT NULL DEFAULT 0");
   db.exec("ALTER TABLE logs ADD COLUMN has_usage_details INTEGER NOT NULL DEFAULT 0");
   console.log("已迁移: logs 增加 usage_source / has_usage_details 列");
+}
+// 旧库迁移：tokens 补充 key_enc 列（旧令牌无明文，无法补录）
+const tokenCols = (
+  db.prepare("PRAGMA table_info(tokens)").all() as Array<{ name: string }>
+).map((c) => c.name);
+if (!tokenCols.includes("key_enc")) {
+  db.exec("ALTER TABLE tokens ADD COLUMN key_enc TEXT NOT NULL DEFAULT ''");
+  console.log("已迁移: tokens 增加 key_enc 列（旧令牌不可取回明文）");
 }
 
 // 种子管理员：admin / admin123

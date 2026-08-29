@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { tokens } from "@/lib/schema";
 import { requireUser } from "@/lib/auth";
-import { generateTokenKey } from "@/lib/crypto";
+import { generateTokenKey, encryptSecret } from "@/lib/crypto";
 
 export async function GET() {
   const r = await requireUser();
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       userId: r.user.id,
       name,
       keyHash: hash,
+      keyEnc: encryptSecret(key), // 加密存储，供令牌列表随时查看/复制
       keyPrefix: prefix,
       quotaLimit: quotaLimitUsd > 0 ? Math.round(quotaLimitUsd * 100000) : 0,
       expiredAt: expiredDays > 0 ? new Date(Date.now() + expiredDays * 86400000) : null,
