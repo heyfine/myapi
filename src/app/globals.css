@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+body {
+  background: #f3f5fb;
+  color: #1a1d21;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9cfdc;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a9b2c8;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用卡片与表单样式，减少页面间重复 */
+.card {
+  @apply rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm hover:shadow-md transition-shadow;
+}
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-700 hover:border-indigo-200 hover:text-indigo-600 hover:bg-indigo-50/50;
+}
+.btn-danger {
+  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border border-red-200 bg-white text-red-600 hover:bg-red-50;
+}
+.input {
+  @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-indigo-400;
+}
+.input:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+.label {
+  @apply mb-1 block text-sm font-medium text-gray-700;
+}
+.badge {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+}
+.th {
+  @apply px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50/80;
+}
+.th:first-child {
+  border-top-left-radius: 0.5rem;
+}
+.th:last-child {
+  border-top-right-radius: 0.5rem;
+}
+.td {
+  @apply px-3 py-2.5 text-sm text-gray-700 border-t border-gray-100;
+}
+table tbody tr {
+  transition: background-color 0.12s;
+}
+table tbody tr:hover {
+  background: #f7f8ff;
+}
+
+/* 页面主标题 */
+.page-title {
+  @apply text-xl font-bold text-gray-900;
+}
