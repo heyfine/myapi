@@ -44,15 +44,17 @@ npm start         # 以后每次用这条启动
 仓库内置多阶段 `Dockerfile` 与 `docker-compose.yml`，构建即所得，无需手动装 Node 环境：
 
 ```bash
-# 方式 A：docker compose（推荐）
+# 方式 A：从源码构建（本地）
 GATEWAY_SECRET=你的强随机密钥 docker compose up -d --build
 
-# 方式 B：纯 docker
-docker build -t myapi:latest .
+# 方式 B：直接拉取已发布的镜像（GitHub Container Registry）
+docker pull ghcr.io/heyfine/myapi:latest
 docker run -d --name llm-gateway --restart unless-stopped \
   -p 3777:3777 -v /你的数据目录:/app/data \
-  -e GATEWAY_SECRET=你的强随机密钥 myapi:latest
+  -e GATEWAY_SECRET=你的强随机密钥 ghcr.io/heyfine/myapi:latest
 ```
+
+> 镜像由 GitHub Actions 在每次打 `v*` 版本标签时自动构建发布到 ghcr.io（免费，无需 Docker Hub 账号）。发布说明见 https://github.com/heyfine/myapi/releases
 
 部署要点：
 
