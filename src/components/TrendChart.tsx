@@ -28,10 +28,15 @@ const METRICS: Array<{ key: Metric; label: string; yField: string }> = [
 
 /**
  * VChart 数字格式化模板（d3 语法）："," 千分位 + "~" 去尾零 + "f" 定点数。
- * axis label.formatter 与 tooltip valueFormatter 都走 VChart 内置 NumberUtil，同一套语法。
- * 实测：107726→107,726 / 1000000→1,000,000 / 0.5→0.5
+ * 仅用于 axis label.formatter（视觉验证过）。tooltip 禁用 valueFormatter 模板——
+ * 与默认 value 回调合并时 VChart 把回调函数传给 Number() 产出 NaN（实测复现）。
+ * tooltip 千分位一律用显式回调 content。
  */
 const NUM_FMT = ",~f";
+
+function fmt(n: number): string {
+  return n.toLocaleString("zh-CN");
+}
 
 export default function TrendChart({
   daily,
@@ -105,9 +110,18 @@ export default function TrendChart({
       ],
       legends: { visible: true, selectMode: "multiple" as const, position: "top" as const },
       tooltip: {
-        // 面积图默认激活 dimension tooltip：valueFormatter 与默认行（key=序列名 value=数值）合并
-        dimension: { content: [{ valueFormatter: NUM_FMT }] },
-        mark: { content: [{ valueFormatter: NUM_FMT }] },
+        // 面积图默认激活 dimension tooltip；key/value 全部显式回调，千分位自己算
+        // （valueFormatter 模板与默认 value 回调合并会 NaN，见 NUM_FMT 注释）
+        dimension: {
+          content: [
+            { key: (d: Record<string, unknown>) => d.Series as string, value: (d: Record<string, unknown>) => fmt(Number(d[yField]) || 0) },
+          ],
+        },
+        mark: {
+          content: [
+            { key: (d: Record<string, unknown>) => d.Series as string, value: (d: Record<string, unknown>) => fmt(Number(d[yField]) || 0) },
+          ],
+        },
       },
       height: 300,
     }),
@@ -127,7 +141,13 @@ export default function TrendChart({
       categoryField: "type",
       label: { visible: true },
       legends: { visible: true, position: "right" as const, selectMode: "multiple" as const },
-      tooltip: { mark: { content: [{ valueFormatter: NUM_FMT }] } },
+      tooltip: {
+        mark: {
+          content: [
+            { key: (d: Record<string, unknown>) => d.type as string, value: (d: Record<string, unknown>) => `${fmt(Number(d.value))} 次` },
+          ],
+        },
+      },
       title: { visible: true, text: `${seriesName}调用次数分布`, subtext: seriesTotals.length === 0 ? "暂无数据" : undefined },
       height: 300,
     }),
@@ -148,7 +168,13 @@ export default function TrendChart({
       axes: [
         { orient: "left", label: { formatter: NUM_FMT } },
       ],
-      tooltip: { mark: { content: [{ valueFormatter: NUM_FMT }] } },
+      tooltip: {
+        mark: {
+          content: [
+            { key: (d: Record<string, unknown>) => d.Name as string, value: (d: Record<string, unknown>) => `${fmt(Number(d["次数"]))} 次` },
+          ],
+        },
+      },
       title: { visible: true, text: `${seriesName}调用次数排名 Top 10`, subtext: values.length === 0 ? "暂无数据" : undefined },
       height: 300,
     };
