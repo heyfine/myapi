@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, usd, time } from "@/lib/client-utils";
+import TrendChart, { type TrendPoint } from "@/components/TrendChart";
 
 type Agg = {
   total: number;
@@ -26,6 +27,9 @@ type ModelStats = {
   agg: Agg;
   byChannel: Array<{ channelName: string | null; total: number; success: number; cost: number; avgLatency: number; promptTokens: number; completionTokens: number; cachedTokens: number; reasoningTokens: number; thinkingTokens: number }>;
   providers: Array<{ id: number; name: string; type: string; baseUrl: string; proxy: string; priority: number; weight: number; status: number }>;
+  daily: TrendPoint[];
+  hourly: TrendPoint[];
+  minutely: TrendPoint[];
 };
 
 type Log = {
@@ -60,6 +64,9 @@ function fmt(n: number): string {
   return n.toLocaleString("zh-CN");
 }
 
+/** 轮询间隔：与仪表盘一致；再短会让 VChart 反复重绘 */
+const POLL_INTERVAL = 5000;
+
 function ModelDetailInner() {
   const searchParams = useSearchParams();
   const model = searchParams.get("model") ?? "";
@@ -69,22 +76,53 @@ function ModelDetailInner() {
   const [logPage, setLogPage] = useState(1);
   const [logTotal, setLogTotal] = useState(0);
   const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const seqRef = useRef(0);
 
   const load = useCallback(() => {
     if (!model) return;
+    const seq = ++seqRef.current;
     api<ModelStats>(`/api/model-stats?model=${encodeURIComponent(model)}&range=${range}`)
-      .then(setStats)
-      .catch((e) => setError(e.message));
+      .then((d) => {
+        if (seq !== seqRef.current) return;
+        setStats(d);
+        setUpdatedAt(new Date());
+        setError("");
+      })
+      .catch((e) => {
+        if (seq !== seqRef.current) return;
+        setError(e.message);
+      });
     api<{ data: Log[]; total: number }>(
       `/api/logs?model=${encodeURIComponent(model)}&page=${logPage}&pageSize=30`,
     )
       .then((d) => {
+        if (seq !== seqRef.current) return;
         setRecentLogs(d.data);
         setLogTotal(d.total);
       })
       .catch(() => {});
   }, [model, range, logPage]);
-  useEffect(load, [load]);
+
+  // 5s 轮询：不可见时跳过；切回可见立即刷新；请求序号防旧响应覆盖新状态
+  useEffect(() => {
+    let alive = true;
+    function tick(): void {
+      if (document.visibilityState !== "visible") return;
+      load();
+    }
+    tick();
+    const timer = setInterval(tick, POLL_INTERVAL);
+    function onVisibilityChange(): void {
+      if (document.visibilityState === "visible") tick();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [load]);
 
   if (!model) {
     return <div className="text-sm text-gray-500">缺少 model 参数，请从仪表盘或日志页点击模型名进入。</div>;
@@ -120,6 +158,9 @@ function ModelDetailInner() {
               {rg.label}
             </button>
           ))}
+        </div>
+        <div className="text-xs text-gray-400">
+          {error && stats ? "刷新失败，保留上次数据" : `每 ${POLL_INTERVAL / 1000} 秒自动刷新${updatedAt ? ` · 更新于 ${updatedAt.toLocaleTimeString("zh-CN", { hour12: false })}` : ""}`}
         </div>
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
@@ -220,6 +261,16 @@ function ModelDetailInner() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* 趋势图：各渠道对比（与仪表盘同款组件，序列维度=渠道） */}
+      <div className="card">
+        <div className="font-semibold mb-3">趋势（按天 / 按小时 / 按分钟）· 各渠道对比</div>
+        {(stats?.daily.length ?? 0) > 0 || (stats?.hourly.length ?? 0) > 0 || (stats?.minutely.length ?? 0) > 0 ? (
+          <TrendChart daily={stats?.daily ?? []} hourly={stats?.hourly ?? []} minutely={stats?.minutely ?? []} seriesName="渠道" />
+        ) : (
+          <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
+        )}
       </div>
 
       {/* 供应商渠道（管理员） */}

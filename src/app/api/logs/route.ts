@@ -26,5 +26,6 @@ export async function GET(req: Request) {
     ? db.select({ n: sql<number>`count(*)` }).from(logs).where(where).get()
     : db.select({ n: sql<number>`count(*)` }).from(logs).get();
 
-  return Response.json({ data: rows, page, total: countRow?.n ?? 0, pageSize });
+  // no-store：模型详情页 5s 轮询此端点（日志页翻页场景也可能触发重复请求）
+  return Response.json({ data: rows, page, total: countRow?.n ?? 0, pageSize }, { headers: { "Cache-Control": "no-store" } });
 }

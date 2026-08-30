@@ -2,6 +2,7 @@ import { and, eq, gte, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { channels, logs } from "@/lib/schema";
 import { requireUser } from "@/lib/auth";
+import { buildDailyTrend, buildHourlyTrend, buildMinutelyTrend } from "@/lib/trend";
 
 /** 单个模型的详细统计：供应商渠道、按渠道分解、耗时/状态/Token 明细 */
 export async function GET(req: Request) {
@@ -81,6 +82,15 @@ export async function GET(req: Request) {
       .all();
   }
 
+  // 趋势（按渠道分序列：模型固定，看各渠道承载）——与仪表盘同一套公共聚合库，
+  // 窗口固定 14 天/24 小时/60 分钟，不随上方 range 选择器变化（选择器只影响统计卡/渠道表）
+  const userCond = r.user.role !== "admin" ? eq(logs.userId, r.user.id) : undefined;
+  const trendScope = userCond ? and(eq(logs.model, model), userCond) : eq(logs.model, model);
+  const daily = buildDailyTrend(logs.channelName, trendScope);
+  const hourly = buildHourlyTrend(logs.channelName, trendScope);
+  const minutely = buildMinutelyTrend(logs.channelName, trendScope);
+
+  // no-store：模型详情页 5s 轮询此端点
   return Response.json({
     model,
     range,
@@ -91,5 +101,8 @@ export async function GET(req: Request) {
     },
     byChannel,
     providers,
-  });
+    daily,
+    hourly,
+    minutely,
+  }, { headers: { "Cache-Control": "no-store" } });
 }
