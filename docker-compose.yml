@@ -9,4 +9,6 @@ services:
     environment:
       # 生产环境务必换成强随机值；更换后已保存的渠道密钥需重新填写
       - GATEWAY_SECRET=${GATEWAY_SECRET:-please-change-me-to-a-long-random-string}
+      # 服务器容器默认 UTC，会导致所有本地时间标签（趋势图/日志页/备份时间）比北京时间慢 8 小时
+      - TZ=${TZ:-Asia/Shanghai}
     restart: unless-stopped
