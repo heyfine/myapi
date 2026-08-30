@@ -64,6 +64,45 @@ SQLite 需要可写本地文件，Vercel Serverless 文件系统只读且临时�
 - [ ] 用真实渠道做一次流式调用冒烟通过
 - [ ] data/gateway.db 已纳入备份计划
 
+## 实际生产部署（Oracle 云服务器，2026-08-30 已上线）
+
+- 主机：甲骨文 ARM 云服务器（Ubuntu 22.04 / aarch64），部署目录 `/root/myapi`，容器名 `llm-gateway`，端口 3777
+- 部署形态：`docker compose`（bind mount `/root/myapi/data:/app/data`），源码为**非 git 目录**（GitHub 仓库为私有，服务器无凭据，升级走"本地 `git archive` 打包 → scp → 解包"传输，见下方"升级 SOP"）
+- `.env` 在 `/root/myapi/.env`（仅 GATEWAY_SECRET，64 位强随机）。**升级/换机时绝不能丢**——换了它，渠道 Key 密文全部解不开
+- 入口脚本只在 `gateway.db` 不存在时才跑 init-db，因此升级重建容器**不动数据**
+
+### 升级 SOP（2026-08-30 实操验证过一次，全程 ~35 分钟）
+
+```bash
+# 1) 本地：打包当前 main（替换 tag 名为实际提交）
+git archive --format=tar.gz -o myapi.tar.gz main
+scp -P 53770 myapi.tar.gz root@服务器:/tmp/
+
+# 2) 服务器：解包到新目录 + 拷 .env + 预构建（不影响运行中的旧容器）
+mkdir /root/myapi-new && tar -xzf /tmp/myapi.tar.gz -C /root/myapi-new
+cp -p /root/myapi/.env /root/myapi-new/.env
+cd /root/myapi-new && docker build -t myapi-myapi:latest .
+docker tag myapi-myapi:latest myapi-myapi:v-rollback-$(date +%Y%m%d-%H%M)   # 回滚点
+
+# 3) 停机窗口（分钟级）：
+docker exec llm-gateway node -e "require('better-sqlite3')('/app/data/gateway.db').pragma('wal_checkpoint(TRUNCATE)')"
+docker stop llm-gateway
+TS=$(date +%Y%m%d-%H%M)
+cp -a /root/myapi/data /opt/backup/gateway-$TS              # 文件级备份（db 三件套）
+cp -p /root/myapi/.env /opt/backup/gateway-$TS/env-file    # 一并备份 secret
+mv /root/myapi /root/myapi-old-$TS                          # 旧目录整体保留
+mv /root/myapi-new /root/myapi
+cp -a /opt/backup/gateway-$TS/data /root/myapi/data         # 从备份回填 data
+cd /root/myapi && docker compose up -d --no-build           # 镜像已预构建，秒起
+
+# 4) 验证：healthcheck healthy、/login 200、表计数与停机前一致、
+#    docker logs 无 "init-db"、容器内 GATEWAY_SECRET 长度 64、
+#    grep 新功能标记（Turbopack 产物在 .next/server/chunks/ 下，不在 route.js）
+```
+
+- 回滚：`docker tag myapi-myapi:v-rollback-$TS myapi-myapi:latest` → `docker compose up -d --force-recreate`；数据回滚用 `/opt/backup/gateway-$TS/` 覆盖 `/root/myapi/data`
+- 旧目录 `/root/myapi-old-$TS` 观察几天无异常后可删
+
 ## 回滚
 
 - 单机：保留上一版 `.next` 构建产物或 git tag，切回后重启进程即可
