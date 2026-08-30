@@ -22,6 +22,7 @@ type Stats = {
   byModel: Array<{ model: string | null; total: number; cost: number; promptTokens: number; completionTokens: number; cachedTokens: number; reasoningTokens: number; thinkingTokens: number }>;
   daily: DailyPoint[];
   hourly: DailyPoint[];
+  minutely: DailyPoint[];
   allModels: string[];
 };
 
@@ -167,9 +168,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="card">
-        <div className="font-semibold mb-3">近 14 天趋势</div>
-        {daily.length > 0 || (stats?.hourly.length ?? 0) > 0 ? (
-          <TrendChart daily={daily} hourly={stats?.hourly ?? []} />
+        <div className="font-semibold mb-3">趋势（按天 / 按小时 / 按分钟）</div>
+        {daily.length > 0 || (stats?.hourly.length ?? 0) > 0 || (stats?.minutely.length ?? 0) > 0 ? (
+          <TrendChart daily={daily} hourly={stats?.hourly ?? []} minutely={stats?.minutely ?? []} />
         ) : (
           <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
         )}

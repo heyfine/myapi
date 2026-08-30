@@ -9,6 +9,7 @@ type Summary = {
   tokens: number;
   retryRules: number;
   modelPrices: number;
+  logs: number;
   exportedAt?: string;
 };
 
@@ -29,7 +30,7 @@ export default function BackupPage() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (data.version !== 1 || !Array.isArray(data.channels)) {
+      if ((data.version !== 1 && data.version !== 2) || !Array.isArray(data.channels)) {
         throw new Error("不是有效的网关备份文件");
       }
       setImportData({
@@ -38,6 +39,7 @@ export default function BackupPage() {
         tokens: (data.tokens ?? []).length,
         retryRules: (data.retryRules ?? []).length,
         modelPrices: (data.modelPrices ?? []).length,
+        logs: (data.logs ?? []).length,
         exportedAt: data.exportedAt,
       });
       setRawData(text);
@@ -53,7 +55,7 @@ export default function BackupPage() {
     if (!importData) return;
     if (
       !confirm(
-        `还原将覆盖当前全部配置（渠道 ${importData.channels}、用户 ${importData.users}、令牌 ${importData.tokens}、重试规则 ${importData.retryRules}、模型定价 ${importData.modelPrices}），且无法撤销。确定继续？`,
+        `还原将覆盖当前全部配置（渠道 ${importData.channels}、用户 ${importData.users}、令牌 ${importData.tokens}、重试规则 ${importData.retryRules}、模型定价 ${importData.modelPrices}${importData.logs > 0 ? `、调用日志 ${importData.logs} 条` : ""}），且无法撤销。确定继续？`,
       )
     ) {
       return;
@@ -65,7 +67,7 @@ export default function BackupPage() {
         body: JSON.stringify({ data: JSON.parse(rawData) }),
       });
       alert(
-        `还原完成：渠道 ${res.counts.channels}、用户 ${res.counts.users}、令牌 ${res.counts.tokens}、重试规则 ${res.counts.retryRules}、模型定价 ${res.counts.modelPrices}。请重新登录。`,
+        `还原完成：渠道 ${res.counts.channels}、用户 ${res.counts.users}、令牌 ${res.counts.tokens}、重试规则 ${res.counts.retryRules}、模型定价 ${res.counts.modelPrices}${res.counts.logs > 0 ? `、调用日志 ${res.counts.logs} 条` : ""}。请重新登录。`,
       );
       window.location.href = "/login";
     } catch (e) {
@@ -84,8 +86,8 @@ export default function BackupPage() {
       <div className="card">
         <div className="font-semibold mb-1">导出备份</div>
         <p className="text-sm text-gray-500 mb-3">
-          下载包含以下内容的 JSON 配置文件：全部渠道（API Key 以明文包含在内，请妥善保管文件）、全部用户（含密码哈希）、
-          全部 API 令牌（含哈希，还原后原令牌继续可用）、重试规则、模型定价。不含调用日志。
+          下载包含以下内容的 JSON 文件：全部渠道（API Key 以明文包含在内，请妥善保管文件）、全部用户（含密码哈希）、
+          全部 API 令牌（含哈希，还原后原令牌继续可用）、重试规则、模型定价、全部调用日志（Token 用量统计的数据源）。
         </p>
         <button className="btn-primary" onClick={exportBackup}>
           导出备份文件
@@ -107,6 +109,7 @@ export default function BackupPage() {
             <div className="text-amber-700">
               渠道 {importData.channels} 个 · 用户 {importData.users} 个 · 令牌 {importData.tokens} 个 · 重试规则{" "}
               {importData.retryRules} 条 · 模型定价 {importData.modelPrices} 条
+              {importData.logs > 0 ? ` · 调用日志 ${importData.logs} 条` : " · 不含调用日志（v1 备份）"}
             </div>
             <button className="btn-primary mt-3" disabled={restoring} onClick={restore}>
               {restoring ? "还原中..." : "确认还原（覆盖现有配置）"}

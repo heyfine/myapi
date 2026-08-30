@@ -167,6 +167,26 @@ export async function GET() {
     };
   });
 
+  // 近 60 分钟逐分钟趋势（桶边界沿用同构实现：UTC 整分钟；配合前端 5s 轮询，分钟级波动实时可见）
+  const MINUTES = 60;
+  const minuteBuckets = new Map<number, Bucket>();
+  const minuteLabels: number[] = [];
+  for (let i = MINUTES - 1; i >= 0; i--) {
+    const start = Math.floor((now - i * 60000) / 60000) * 60000;
+    minuteBuckets.set(start, emptyBucket());
+    minuteLabels.push(start);
+  }
+  for (const row of groupedTrend(sql`(${logs.createdAt} / 60000) * 60000`, new Date(now - MINUTES * 60000))) {
+    const b = minuteBuckets.get(Number(row.bucket));
+    if (b) mergeBucket(b, row);
+  }
+  const minutely = minuteLabels.map((ts) => {
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return { date: `${hh}:${mm}`, label: `${hh}:${mm}`, ...minuteBuckets.get(ts)! };
+  });
+
   // no-store：前端 5s 轮询此端点，不允许浏览器启发式缓存，否则表现为"轮询了但数字不动"
   return Response.json({
     overall:
@@ -187,6 +207,7 @@ export async function GET() {
     byModel,
     daily,
     hourly,
+    minutely,
     allModels,
   }, { headers: { "Cache-Control": "no-store" } });
 }

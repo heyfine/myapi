@@ -27,12 +27,12 @@ function fmt(n: number): string {
   return n.toLocaleString("zh-CN");
 }
 
-export default function TrendChart({ daily, hourly }: { daily: DailyPoint[]; hourly: DailyPoint[] }) {
-  const [view, setView] = useState<"day" | "hour">("day");
+export default function TrendChart({ daily, hourly, minutely }: { daily: DailyPoint[]; hourly: DailyPoint[]; minutely: DailyPoint[] }) {
+  const [view, setView] = useState<"day" | "hour" | "minute">("day");
   const [metric, setMetric] = useState<Metric>("count");
   const [tab, setTab] = useState<Tab>("trend");
 
-  const data = view === "day" ? daily : hourly;
+  const data = view === "day" ? daily : view === "hour" ? hourly : minutely;
   const yField = METRICS.find((m) => m.key === metric)!.yField;
 
   // 展开为长表：每个时间桶 × 每个模型一行
@@ -68,7 +68,7 @@ export default function TrendChart({ daily, hourly }: { daily: DailyPoint[]; hou
   }, [data]);
 
   const metricLabel = METRICS.find((m) => m.key === metric)!.label;
-  const rangeText = view === "day" ? "近 14 天" : "近 24 小时";
+  const rangeText = view === "day" ? "近 14 天" : view === "hour" ? "近 24 小时" : "近 60 分钟";
 
   // 趋势：按模型堆叠面积图（new-api 同款 spec 结构）
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,6 +167,14 @@ export default function TrendChart({ daily, hourly }: { daily: DailyPoint[]; hou
               onClick={() => setView("hour")}
             >
               按小时
+            </button>
+            <button
+              className={`px-3 py-1 cursor-pointer transition-colors ${
+                view === "minute" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+              onClick={() => setView("minute")}
+            >
+              按分钟
             </button>
           </div>
           {/* 指标切换（仅趋势图需要） */}
