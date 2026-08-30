@@ -26,9 +26,12 @@ const METRICS: Array<{ key: Metric; label: string; yField: string }> = [
   { key: "cost", label: "消费金额", yField: "消费($)" },
 ];
 
-function fmt(n: number): string {
-  return n.toLocaleString("zh-CN");
-}
+/**
+ * VChart 数字格式化模板（d3 语法）："," 千分位 + "~" 去尾零 + "f" 定点数。
+ * axis label.formatter 与 tooltip valueFormatter 都走 VChart 内置 NumberUtil，同一套语法。
+ * 实测：107726→107,726 / 1000000→1,000,000 / 0.5→0.5
+ */
+const NUM_FMT = ",~f";
 
 export default function TrendChart({
   daily,
@@ -84,7 +87,7 @@ export default function TrendChart({
   const metricLabel = METRICS.find((m) => m.key === metric)!.label;
   const rangeText = view === "day" ? "近 14 天" : view === "hour" ? "近 24 小时" : "近 60 分钟";
 
-  // 趋势：按序列堆叠面积图；y 轴与 tooltip 都做千分位
+  // 趋势：按序列堆叠面积图；y 轴与 tooltip 千分位见 NUM_FMT 说明
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const trendSpec: any = useMemo(
     () => ({
@@ -97,28 +100,14 @@ export default function TrendChart({
       area: { style: { fillOpacity: 0.35, curveType: "monotone" } },
       line: { style: { curveType: "monotone", lineWidth: 2 } },
       axes: [
-        // 千分位：y 轴数值每三位加逗号；VChart formatMethod 入参可能是 number 或 string
-        { orient: "left", formatMethod: (n: number | string) => fmt(Number(n)) },
+        // y 轴千分位：label.formatter 必须挂 label 下（挂在 axis 层无效，VChart 静默忽略）
+        { orient: "left", label: { formatter: NUM_FMT } },
       ],
       legends: { visible: true, selectMode: "multiple" as const, position: "top" as const },
       tooltip: {
-        mark: {
-          title: { value: (d: { Time?: string }) => `${d.Time}（${rangeText}）` },
-          content: [
-            {
-              key: (d: Record<string, unknown>) => d.Series as string,
-              value: (d: Record<string, unknown>) => fmt(Number(d[yField]) || 0),
-            },
-            {
-              key: "合计",
-              value: (d: Record<string, unknown>) => {
-                const same = (longData as Array<Record<string, unknown>>).filter((r) => r.Time === d.Time);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                return fmt(same.reduce((s, r) => s + Number((r as any)[yField]) || 0, 0));
-              },
-            },
-          ],
-        },
+        // 面积图默认激活 dimension tooltip：valueFormatter 与默认行（key=序列名 value=数值）合并
+        dimension: { content: [{ valueFormatter: NUM_FMT }] },
+        mark: { content: [{ valueFormatter: NUM_FMT }] },
       },
       height: 300,
     }),
@@ -138,7 +127,7 @@ export default function TrendChart({
       categoryField: "type",
       label: { visible: true },
       legends: { visible: true, position: "right" as const, selectMode: "multiple" as const },
-      tooltip: { mark: { content: [{ key: (d: Record<string, unknown>) => d.type as string, value: (d: Record<string, unknown>) => `${fmt(Number(d.value))} 次` }] } },
+      tooltip: { mark: { content: [{ valueFormatter: NUM_FMT }] } },
       title: { visible: true, text: `${seriesName}调用次数分布`, subtext: seriesTotals.length === 0 ? "暂无数据" : undefined },
       height: 300,
     }),
@@ -157,9 +146,9 @@ export default function TrendChart({
       seriesField: "Name",
       legends: { visible: false },
       axes: [
-        { orient: "left", formatMethod: (n: number | string) => fmt(Number(n)) },
+        { orient: "left", label: { formatter: NUM_FMT } },
       ],
-      tooltip: { mark: { content: [{ key: (d: Record<string, unknown>) => d.Name as string, value: (d: Record<string, unknown>) => `${fmt(Number(d["次数"]))} 次` }] } },
+      tooltip: { mark: { content: [{ valueFormatter: NUM_FMT }] } },
       title: { visible: true, text: `${seriesName}调用次数排名 Top 10`, subtext: values.length === 0 ? "暂无数据" : undefined },
       height: 300,
     };
