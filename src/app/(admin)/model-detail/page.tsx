@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, usd, time } from "@/lib/client-utils";
 import TrendChart, { type TrendPoint } from "@/components/TrendChart";
+import UsageTable from "@/components/UsageTable";
 
 type Agg = {
   total: number;
@@ -140,7 +141,6 @@ function ModelDetailInner() {
         { label: "总 Tokens", value: fmt(agg.promptTokens + agg.completionTokens) },
       ]
     : [];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
@@ -150,10 +150,8 @@ function ModelDetailInner() {
         <h1 className="text-xl font-bold font-mono">{model}</h1>
         <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs ml-auto">
           {RANGES.map((rg) => (
-            <button
-              key={rg.key}
+            <button key={rg.key} onClick={() => setRange(rg.key)}
               className={`px-3 py-1 cursor-pointer ${range === rg.key ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-              onClick={() => setRange(rg.key)}
             >
               {rg.label}
             </button>
@@ -271,6 +269,12 @@ function ModelDetailInner() {
         ) : (
           <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
         )}
+      </div>
+
+      {/* Token 用量统计（按日期维度，表格；单模型口径） */}
+      <div className="card">
+        <div className="font-semibold mb-3">Token 用量统计（按天 / 按月 / 按年 / 自定义）</div>
+        <UsageTable model={model} />
       </div>
 
       {/* 供应商渠道（管理员） */}

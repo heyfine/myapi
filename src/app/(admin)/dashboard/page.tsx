@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, usd } from "@/lib/client-utils";
 import TrendChart, { type DailyPoint } from "@/components/TrendChart";
+import UsageTable from "@/components/UsageTable";
 
 type Stats = {
   overall: {
@@ -174,6 +175,12 @@ export default function DashboardPage() {
         ) : (
           <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
         )}
+      </div>
+
+      {/* Token 用量统计（按日期维度，表格） */}
+      <div className="card">
+        <div className="font-semibold mb-3">Token 用量统计（按天 / 按月 / 按年 / 自定义）</div>
+        <UsageTable />
       </div>
 
       {/* 模型列表 */}
