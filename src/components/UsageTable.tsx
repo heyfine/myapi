@@ -253,7 +253,7 @@ function FlatTable({ data, dateColTitle }: { data: UsageResp | null; dateColTitl
   );
 }
 
-/** 渠道明细分组表（模型详情页用，new-api 风格：日期 rowspan + 渠道子行 + 细分 + 累计） */
+/** 渠道明细分组表（模型详情页用，new-api 风格：日期 rowspan + 渠道子行 + 细分） */
 function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColTitle: string }) {
   const rows = data.rows;
   const t = data.total;
@@ -265,20 +265,10 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
     list.push(row);
     groups.set(row.date, list);
   }
-  // 渠道累计列：正序（时间从早到晚）累加 = 每行显示该渠道截至此日期的区间内累计
-  const cumToRow = new Map<string, { cost: number; tokens: number }>();
-  const run = new Map<string, { cost: number; tokens: number }>();
-  for (const row of [...rows].reverse()) {
-    const key = row.channel ?? "";
-    const prev = run.get(key) ?? { cost: 0, tokens: 0 };
-    const cur = { cost: prev.cost + row.cost, tokens: prev.tokens + row.promptTokens + row.completionTokens };
-    run.set(key, cur);
-    cumToRow.set(`${row.date}||${key}`, cur);
-  }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1100px] text-sm">
+      <table className="w-full min-w-[980px] text-sm">
         <thead>
           <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
             <th className="py-2 pr-3 font-medium">{dateColTitle}</th>
@@ -292,15 +282,13 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
             <th className="py-2 pr-3 font-medium text-right" title="reasoning + thinking">推理</th>
             <th className="py-2 pr-3 font-medium text-right" title="= 输出 - 推理">回答</th>
             <th className="py-2 pr-3 font-medium text-right">token</th>
-            <th className="py-2 pr-3 font-medium text-right">消费</th>
-            <th className="py-2 pr-3 font-medium text-right" title="该渠道在区间内的累计消费">总消费</th>
-            <th className="py-2 font-medium text-right" title="该渠道在区间内的累计 tokens">总token</th>
+            <th className="py-2 font-medium text-right">消费</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={14} className="py-8 text-center text-gray-400">
+              <td colSpan={12} className="py-8 text-center text-gray-400">
                 所选区间暂无数据
               </td>
             </tr>
@@ -308,7 +296,6 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
           {[...groups.entries()].map(([date, groupRows]) => (
             <Fragment key={date}>
               {groupRows.map((row, i) => {
-                const cumV = cumToRow.get(`${date}||${row.channel ?? ""}`) ?? { cost: 0, tokens: 0 };
                 return (
                   <tr key={`${date}-${row.channel ?? "unknown"}`} className="border-b border-gray-100 hover:bg-gray-50">
                     {i === 0 ? (
@@ -326,14 +313,12 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
                     <td className="py-2 pr-3 text-right font-mono text-fuchsia-600">{fmt(row.reasoningTokens)}</td>
                     <td className="py-2 pr-3 text-right font-mono">{fmt(Math.max(0, row.completionTokens - row.reasoningTokens))}</td>
                     <td className="py-2 pr-3 text-right font-mono font-medium">{fmt(row.promptTokens + row.completionTokens)}</td>
-                    <td className="py-2 pr-3 text-right font-mono">{usd(row.cost)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-gray-500">{usd(cumV.cost)}</td>
-                    <td className="py-2 text-right font-mono text-gray-500">{fmt(cumV.tokens)}</td>
+                    <td className="py-2 text-right font-mono">{usd(row.cost)}</td>
                   </tr>
                 );
               })}
               <tr key={`${date}-sum`} className="bg-gray-50/70 border-b border-gray-200 text-xs">
-                <td colSpan={2} className="py-1.5 pr-3 text-right text-gray-500">{date} 小计</td>
+                <td colSpan={2} className="py-1.5 pr-3 text-gray-500">{date} 小计</td>
                 <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.count, 0))}</td>
                 <td className="py-1.5 pr-3 text-right font-mono">-</td>
                 <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens, 0))}</td>
@@ -344,7 +329,6 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
                 <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + Math.max(0, r.completionTokens - r.reasoningTokens), 0))}</td>
                 <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens + r.completionTokens, 0))}</td>
                 <td className="py-1.5 pr-3 text-right font-mono">{usd(groupRows.reduce((s, r) => s + r.cost, 0))}</td>
-                <td colSpan={2} className="py-1.5" />
               </tr>
             </Fragment>
           ))}
@@ -361,7 +345,6 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
               <td className="py-2 pr-3 text-right font-mono">{fmt(Math.max(0, t.completionTokens - t.reasoningTokens))}</td>
               <td className="py-2 pr-3 text-right font-mono">{fmt(t.promptTokens + t.completionTokens)}</td>
               <td className="py-2 pr-3 text-right font-mono">{usd(t.cost)}</td>
-              <td colSpan={2} className="py-2" />
             </tr>
           )}
         </tbody>
