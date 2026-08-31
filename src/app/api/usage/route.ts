@@ -6,16 +6,23 @@ import { requireUser } from "@/lib/auth";
 /**
  * Token 用量统计表（按日期维度）：仪表盘/模型详情页共用。
  * granularity=day|month|year + from/to（YYYY-MM-DD，可省略走默认窗口）+ 可选 model。
- * 与 /api/stats 同口径：桶表达式用 sqlite localtime（容器 TZ=Asia/Shanghai），聚合列一致。
+ * breakdown=channel 时按「日期桶×渠道」分组（new-api 风格明细表），细分缓存/推理列。
+ * 与 /api/stats 同口径：桶表达式用 sqlite localtime（容器 TZ=Asia/Shanghai）。
  */
 
-export interface UsageRow {
+interface BaseRow {
   date: string;
   count: number;
   success: number;
   cost: number;
   promptTokens: number;
   completionTokens: number;
+}
+
+interface ChannelRow extends BaseRow {
+  channel: string | null;
+  cachedTokens: number;
+  reasoningTokens: number;
 }
 
 function err(msg: string): Response {
@@ -28,6 +35,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const granularity = url.searchParams.get("granularity") ?? "day";
+  const breakdown = url.searchParams.get("breakdown") === "channel" ? "channel" : "none";
   const model = url.searchParams.get("model") || undefined;
   let from = url.searchParams.get("from") || "";
   let to = url.searchParams.get("to") || "";
@@ -36,7 +44,7 @@ export async function GET(request: Request) {
     return err("granularity 必须是 day / month / year");
   }
 
-  // 默认窗口：day=近30天（含今天），month=近12个月，year=全部（用日志表最早记录兜底）
+  // 默认窗口：day=近30天（含今天），month=近12个月，year=全部
   const now = new Date();
   if (!from || !to) {
     if (granularity === "day") {
@@ -74,6 +82,47 @@ export async function GET(request: Request) {
   if (model) conds.push(eq(logs.model, model));
   if (r.user.role !== "admin") conds.push(eq(logs.userId, r.user.id));
 
+  const where = and(...conds);
+
+  if (breakdown === "channel") {
+    // 按日期桶 × 渠道 分组：每行是某渠道在某个桶的用量明细
+    const rows = db
+      .select({
+        date: bucketExpr,
+        channel: logs.channelName,
+        count: sql<number>`count(*)`,
+        success: sql<number>`sum(case when ${logs.status} = 200 then 1 else 0 end)`,
+        cost: sql<number>`coalesce(sum(${logs.cost}), 0)`,
+        promptTokens: sql<number>`coalesce(sum(${logs.promptTokens}), 0)`,
+        completionTokens: sql<number>`coalesce(sum(${logs.completionTokens}), 0)`,
+        cachedTokens: sql<number>`coalesce(sum(${logs.cachedTokens}), 0)`,
+        reasoningTokens: sql<number>`coalesce(sum(${logs.reasoningTokens}) + sum(${logs.thinkingTokens}), 0)`,
+      })
+      .from(logs)
+      .where(where)
+      .groupBy(bucketExpr, logs.channelName)
+      .orderBy(sql`1 desc`, sql`count(*) desc`)
+      .all() as Array<ChannelRow & { channel: string | null }>;
+
+    const total = rows.reduce(
+      (acc, row) => ({
+        count: acc.count + row.count,
+        success: acc.success + row.success,
+        cost: acc.cost + row.cost,
+        promptTokens: acc.promptTokens + row.promptTokens,
+        completionTokens: acc.completionTokens + row.completionTokens,
+        cachedTokens: acc.cachedTokens + row.cachedTokens,
+        reasoningTokens: acc.reasoningTokens + row.reasoningTokens,
+      }),
+      { count: 0, success: 0, cost: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, reasoningTokens: 0 },
+    );
+
+    return Response.json(
+      { granularity, from: from || null, to: to || null, model: model ?? null, breakdown, rows, total },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const rows = db
     .select({
       date: bucketExpr,
@@ -84,17 +133,10 @@ export async function GET(request: Request) {
       completionTokens: sql<number>`coalesce(sum(${logs.completionTokens}), 0)`,
     })
     .from(logs)
-    .where(and(...conds))
+    .where(where)
     .groupBy(bucketExpr)
     .orderBy(sql`1 desc`)
-    .all() as Array<{
-      date: string;
-      count: number;
-      success: number;
-      cost: number;
-      promptTokens: number;
-      completionTokens: number;
-    }>;
+    .all() as Array<BaseRow>;
 
   const total = rows.reduce(
     (acc, row) => ({
@@ -109,7 +151,7 @@ export async function GET(request: Request) {
 
   // 前端 5s 轮询随页面节奏，同样禁缓存
   return Response.json(
-    { granularity, from: from || null, to: to || null, model: model ?? null, rows, total },
+    { granularity, from: from || null, to: to || null, model: model ?? null, breakdown, rows, total },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

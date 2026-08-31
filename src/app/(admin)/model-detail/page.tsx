@@ -271,10 +271,10 @@ function ModelDetailInner() {
         )}
       </div>
 
-      {/* Token 用量统计（按日期维度，表格；单模型口径） */}
+      {/* Token 用量统计（按日期维度，new-api 风格渠道明细表；单模型口径） */}
       <div className="card">
         <div className="font-semibold mb-3">Token 用量统计（按天 / 按月 / 按年 / 自定义）</div>
-        <UsageTable model={model} />
+        <UsageTable model={model} breakdown="channel" />
       </div>
 
       {/* 供应商渠道（管理员） */}
