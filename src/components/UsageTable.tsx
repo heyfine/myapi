@@ -270,19 +270,20 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
     <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] text-sm">
         <thead>
-          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-            <th className="py-2 pr-3 font-medium">{dateColTitle}</th>
-            <th className="py-2 pr-3 font-medium">渠道</th>
-            <th className="py-2 pr-3 font-medium text-right">调用次数</th>
-            <th className="py-2 pr-3 font-medium text-right">成功率</th>
-            <th className="py-2 pr-3 font-medium text-right">输入</th>
-            <th className="py-2 pr-3 font-medium text-right text-sky-600" title="输入中命中上游缓存的部分">缓存命中</th>
-            <th className="py-2 pr-3 font-medium text-right text-orange-500" title="= 输入 - 缓存命中">缓存未命中</th>
-            <th className="py-2 pr-3 font-medium text-right">输出</th>
-            <th className="py-2 pr-3 font-medium text-right" title="reasoning + thinking">推理</th>
-            <th className="py-2 pr-3 font-medium text-right" title="= 输出 - 推理">回答</th>
-            <th className="py-2 pr-3 font-medium text-right">token</th>
-            <th className="py-2 font-medium text-right">消费</th>
+          {/* th 的 UA 默认 text-align:center 打得过 tr 继承与未及时生成的工具类；内联 style 强制左对齐 */}
+          <tr className="text-xs text-gray-500 border-b border-gray-200">
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>{dateColTitle}</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>渠道</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>调用次数</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>成功率</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>输入</th>
+            <th className="py-2 pr-3 font-medium text-sky-600" style={{ textAlign: "left" }} title="输入中命中上游缓存的部分">缓存命中</th>
+            <th className="py-2 pr-3 font-medium text-orange-500" style={{ textAlign: "left" }} title="= 输入 - 缓存命中">缓存未命中</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>输出</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }} title="reasoning + thinking">推理</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }} title="= 输出 - 推理">回答</th>
+            <th className="py-2 pr-3 font-medium" style={{ textAlign: "left" }}>token</th>
+            <th className="py-2 font-medium" style={{ textAlign: "left" }}>消费</th>
           </tr>
         </thead>
         <tbody>
@@ -304,47 +305,47 @@ function ChannelTable({ data, dateColTitle }: { data: ChannelUsageResp; dateColT
                       </td>
                     ) : null}
                     <td className="py-2 pr-3 max-w-[220px] truncate" title={row.channel ?? ""}>{row.channel ?? "未知"}</td>
-                    <td className="py-2 pr-3 text-right font-mono">{fmt(row.count)}</td>
-                    <td className="py-2 pr-3 text-right font-mono">{row.count > 0 ? `${((row.success / row.count) * 100).toFixed(1)}%` : "-"}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-indigo-600">{fmt(row.promptTokens)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-sky-600">{fmt(row.cachedTokens)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-orange-500">{fmt(Math.max(0, row.promptTokens - row.cachedTokens))}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-violet-600">{fmt(row.completionTokens)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-fuchsia-600">{fmt(row.reasoningTokens)}</td>
-                    <td className="py-2 pr-3 text-right font-mono">{fmt(Math.max(0, row.completionTokens - row.reasoningTokens))}</td>
-                    <td className="py-2 pr-3 text-right font-mono font-medium">{fmt(row.promptTokens + row.completionTokens)}</td>
-                    <td className="py-2 text-right font-mono">{usd(row.cost)}</td>
+                    <td className="py-2 pr-3 text-left font-mono">{fmt(row.count)}</td>
+                    <td className="py-2 pr-3 text-left font-mono">{row.count > 0 ? `${((row.success / row.count) * 100).toFixed(1)}%` : "-"}</td>
+                    <td className="py-2 pr-3 text-left font-mono text-indigo-600">{fmt(row.promptTokens)}</td>
+                    <td className="py-2 pr-3 text-left font-mono text-sky-600">{fmt(row.cachedTokens)}</td>
+                    <td className="py-2 pr-3 text-left font-mono text-orange-500">{fmt(Math.max(0, row.promptTokens - row.cachedTokens))}</td>
+                    <td className="py-2 pr-3 text-left font-mono text-violet-600">{fmt(row.completionTokens)}</td>
+                    <td className="py-2 pr-3 text-left font-mono text-fuchsia-600">{fmt(row.reasoningTokens)}</td>
+                    <td className="py-2 pr-3 text-left font-mono">{fmt(Math.max(0, row.completionTokens - row.reasoningTokens))}</td>
+                    <td className="py-2 pr-3 text-left font-mono font-medium">{fmt(row.promptTokens + row.completionTokens)}</td>
+                    <td className="py-2 text-left font-mono">{usd(row.cost)}</td>
                   </tr>
                 );
               })}
               <tr key={`${date}-sum`} className="bg-gray-50/70 border-b border-gray-200 text-xs">
                 <td colSpan={2} className="py-1.5 pr-3 text-gray-500">{date} 小计</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.count, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">-</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.cachedTokens, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + Math.max(0, r.promptTokens - r.cachedTokens), 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.completionTokens, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.reasoningTokens, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + Math.max(0, r.completionTokens - r.reasoningTokens), 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens + r.completionTokens, 0))}</td>
-                <td className="py-1.5 pr-3 text-right font-mono">{usd(groupRows.reduce((s, r) => s + r.cost, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.count, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">-</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.cachedTokens, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + Math.max(0, r.promptTokens - r.cachedTokens), 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.completionTokens, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.reasoningTokens, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + Math.max(0, r.completionTokens - r.reasoningTokens), 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{fmt(groupRows.reduce((s, r) => s + r.promptTokens + r.completionTokens, 0))}</td>
+                <td className="py-1.5 pr-3 text-left font-mono">{usd(groupRows.reduce((s, r) => s + r.cost, 0))}</td>
               </tr>
             </Fragment>
           ))}
           {rows.length > 0 && (
             <tr className="border-t-2 border-gray-300 bg-gray-100 font-semibold">
               <td colSpan={2} className="py-2 pr-3">合计</td>
-              <td className="py-2 pr-3 text-right font-mono">{fmt(t.count)}</td>
-              <td className="py-2 pr-3 text-right font-mono">{t.count > 0 ? `${((t.success / t.count) * 100).toFixed(1)}%` : "-"}</td>
-              <td className="py-2 pr-3 text-right font-mono text-indigo-600">{fmt(t.promptTokens)}</td>
-              <td className="py-2 pr-3 text-right font-mono text-sky-600">{fmt(t.cachedTokens)}</td>
-              <td className="py-2 pr-3 text-right font-mono text-orange-500">{fmt(Math.max(0, t.promptTokens - t.cachedTokens))}</td>
-              <td className="py-2 pr-3 text-right font-mono text-violet-600">{fmt(t.completionTokens)}</td>
-              <td className="py-2 pr-3 text-right font-mono text-fuchsia-600">{fmt(t.reasoningTokens)}</td>
-              <td className="py-2 pr-3 text-right font-mono">{fmt(Math.max(0, t.completionTokens - t.reasoningTokens))}</td>
-              <td className="py-2 pr-3 text-right font-mono">{fmt(t.promptTokens + t.completionTokens)}</td>
-              <td className="py-2 pr-3 text-right font-mono">{usd(t.cost)}</td>
+              <td className="py-2 pr-3 text-left font-mono">{fmt(t.count)}</td>
+              <td className="py-2 pr-3 text-left font-mono">{t.count > 0 ? `${((t.success / t.count) * 100).toFixed(1)}%` : "-"}</td>
+              <td className="py-2 pr-3 text-left font-mono text-indigo-600">{fmt(t.promptTokens)}</td>
+              <td className="py-2 pr-3 text-left font-mono text-sky-600">{fmt(t.cachedTokens)}</td>
+              <td className="py-2 pr-3 text-left font-mono text-orange-500">{fmt(Math.max(0, t.promptTokens - t.cachedTokens))}</td>
+              <td className="py-2 pr-3 text-left font-mono text-violet-600">{fmt(t.completionTokens)}</td>
+              <td className="py-2 pr-3 text-left font-mono text-fuchsia-600">{fmt(t.reasoningTokens)}</td>
+              <td className="py-2 pr-3 text-left font-mono">{fmt(Math.max(0, t.completionTokens - t.reasoningTokens))}</td>
+              <td className="py-2 pr-3 text-left font-mono">{fmt(t.promptTokens + t.completionTokens)}</td>
+              <td className="py-2 pr-3 text-left font-mono">{usd(t.cost)}</td>
             </tr>
           )}
         </tbody>
