@@ -6,6 +6,8 @@ data/
 next-env.d.ts
 .zcode/
 
+# 本地文稿（不进任何远程仓库）
+docs/promo-article.md
 # 本机文件（不进公开仓库）
 一键启动.bat
 启动方法.txt
