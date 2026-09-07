@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start --port 3777",
     "db:init": "tsx scripts/init-db.ts",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync": "node scripts/sync-repos.mjs"
   },
   "dependencies": {
     "@visactor/react-vchart": "^2.1.6",
