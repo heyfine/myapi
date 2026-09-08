@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, time } from "@/lib/client-utils";
+import ChannelModelsModal from "@/components/ChannelModelsModal";
 
 type Channel = {
   id: number;
@@ -55,6 +56,8 @@ export default function ChannelsPage() {
   const [checkedModels, setCheckedModels] = useState<Set<string>>(new Set());
   const [modelTests, setModelTests] = useState<Record<string, { status: "running" | "ok" | "fail"; latency?: number; error?: string }>>({});
   const [testingAll, setTestingAll] = useState(false);
+  /** 模型列表浮窗：值为对应渠道，null = 关闭 */
+  const [modelsModal, setModelsModal] = useState<Channel | null>(null);
 
   const load = useCallback(() => {
     api<{ data: Channel[] }>("/api/channels")
@@ -388,14 +391,21 @@ export default function ChannelsPage() {
                 <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
                   {c.baseUrl}
                 </td>
-                <td className="td font-mono text-xs max-w-[240px] truncate" title={c.models}>
-                  {(() => {
-                    try {
-                      return JSON.parse(c.models).join(", ");
-                    } catch {
-                      return c.models;
-                    }
-                  })()}
+                <td className="td font-mono text-xs max-w-[240px]">
+                  <button
+                    type="button"
+                    className="block w-full text-left truncate cursor-pointer hover:text-blue-600"
+                    title="点击查看该渠道的全部模型"
+                    onClick={() => setModelsModal(c)}
+                  >
+                    {(() => {
+                      try {
+                        return JSON.parse(c.models).join(", ");
+                      } catch {
+                        return c.models;
+                      }
+                    })()}
+                  </button>
                 </td>
                 <td className="td font-mono text-xs max-w-[140px] truncate" title={c.proxy || undefined}>
                   {c.proxy ? (
@@ -761,6 +771,25 @@ export default function ChannelsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {modelsModal && (
+        <ChannelModelsModal
+          channelName={modelsModal.name}
+          models={(() => {
+            try {
+              const arr = JSON.parse(modelsModal.models);
+              return Array.isArray(arr) ? arr.map(String) : [];
+            } catch {
+              // 兼容历史数据：个别渠道可能存的是逗号/换行分隔的裸文本
+              return modelsModal.models
+                .split(/[\n,]/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+            }
+          })()}
+          onClose={() => setModelsModal(null)}
+        />
       )}
     </div>
   );
