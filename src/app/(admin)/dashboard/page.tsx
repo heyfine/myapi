@@ -177,7 +177,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Token 用量统计（按日期维度，表格） */}
+      {/* Token 用量统计（按日期维度，全量汇总，含缓存/推理细分列） */}
       <div className="card">
         <div className="font-semibold mb-3">Token 用量统计（按天 / 按月 / 按年 / 自定义）</div>
         <UsageTable />

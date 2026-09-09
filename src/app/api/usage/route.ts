@@ -131,12 +131,14 @@ export async function GET(request: Request) {
       cost: sql<number>`coalesce(sum(${logs.cost}), 0)`,
       promptTokens: sql<number>`coalesce(sum(${logs.promptTokens}), 0)`,
       completionTokens: sql<number>`coalesce(sum(${logs.completionTokens}), 0)`,
+      cachedTokens: sql<number>`coalesce(sum(${logs.cachedTokens}), 0)`,
+      reasoningTokens: sql<number>`coalesce(sum(${logs.reasoningTokens}) + sum(${logs.thinkingTokens}), 0)`,
     })
     .from(logs)
     .where(where)
     .groupBy(bucketExpr)
     .orderBy(sql`1 desc`)
-    .all() as Array<BaseRow>;
+    .all() as Array<BaseRow & { cachedTokens: number; reasoningTokens: number }>;
 
   const total = rows.reduce(
     (acc, row) => ({
@@ -145,8 +147,10 @@ export async function GET(request: Request) {
       cost: acc.cost + row.cost,
       promptTokens: acc.promptTokens + row.promptTokens,
       completionTokens: acc.completionTokens + row.completionTokens,
+      cachedTokens: acc.cachedTokens + row.cachedTokens,
+      reasoningTokens: acc.reasoningTokens + row.reasoningTokens,
     }),
-    { count: 0, success: 0, cost: 0, promptTokens: 0, completionTokens: 0 },
+    { count: 0, success: 0, cost: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, reasoningTokens: 0 },
   );
 
   // 前端 5s 轮询随页面节奏，同样禁缓存
