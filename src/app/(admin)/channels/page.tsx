@@ -351,6 +351,19 @@ export default function ChannelsPage() {
     setCheckedModels(new Set());
   }
 
+  /** 把模型映射中的对外模型名（左列）批量并入「支持的模型」文本框，自动去重，无新增则不动 */
+  function addMappingModelsToSupported() {
+    if (!form) return;
+    const mapped = [...new Set(form.mappingRows.map((row) => row.from.trim()).filter(Boolean))];
+    const existing = form.modelsText
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const added = mapped.filter((m) => !existing.includes(m));
+    if (added.length === 0) return;
+    setForm({ ...form, modelsText: [...existing, ...added].join("\n") });
+  }
+
   const BASE_URL_HINTS: Record<string, string> = {
     openai: "https://api.openai.com",
     "openai-compatible": "例如 https://api.deepseek.com 或 https://open.bigmodel.cn/api/paas/v4",
@@ -669,15 +682,26 @@ export default function ChannelsPage() {
               )}
             </div>
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="label !mb-0">模型映射（可选）：对外模型名 → 上游真实模型名</label>
-                <button
-                  type="button"
-                  className="btn-ghost !py-1 !px-2 text-xs"
-                  onClick={() => setForm({ ...form, mappingRows: [...form.mappingRows, { from: "", to: "" }] })}
-                >
-                  + 添加映射
-                </button>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="label !mb-0 min-w-0 truncate">模型映射（可选）</label>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <button
+                    type="button"
+                    className="btn-ghost !py-1 !px-2 text-xs"
+                    title="把映射左列的对外模型名批量并入「支持的模型」，自动去重"
+                    disabled={!form.mappingRows.some((row) => row.from.trim())}
+                    onClick={addMappingModelsToSupported}
+                  >
+                    添加到支持的模型
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost !py-1 !px-2 text-xs"
+                    onClick={() => setForm({ ...form, mappingRows: [...form.mappingRows, { from: "", to: "" }] })}
+                  >
+                    + 添加映射
+                  </button>
+                </div>
               </div>
               {form.mappingRows.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-xs text-gray-400">
