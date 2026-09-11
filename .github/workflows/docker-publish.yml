@@ -49,19 +49,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      # GHCR 新包默认私有，发布后自动改为 public
-      - name: Set package visibility to public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # 包名 = 仓库名（ghcr.io/{owner}/{repo} 的最后一段）
-          PKG="${{ github.event.repository.name }}"
-          for pkg in "user/packages/container/$PKG" "orgs/${{ github.repository_owner }}/packages/container/$PKG"; do
-            echo "尝试: $pkg"
-            if gh api "$pkg/visibility" --method PATCH -f visibility=public > /dev/null 2>&1; then
-              echo "✓ 已设为 public"
-              break
-            else
-              echo "该端点失败，试下一个"
-            fi
-          done
+      # 注：GHCR 新容器包默认私有，且用户包的可见性无法通过 API 修改（REST 无此端点，
+      # PATCH .../visibility 返回 404）。首次发布需在包设置页手动改为 Public：
+      # https://github.com/users/heyfine/packages/container/myapi/settings → Danger Zone → Change visibility
+      # 设为 Public 后持久生效，后续推送无需再处理。
