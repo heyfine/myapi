@@ -539,7 +539,7 @@ export default function ChannelsPage() {
 
       {form && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="font-bold text-lg">{form.id ? "编辑渠道" : "新建渠道"}</div>
               <button
@@ -615,7 +615,7 @@ export default function ChannelsPage() {
               />
               {fetchedModels && (
                 <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50/50">                  <div className="flex items-center justify-between px-3 py-2 border-b border-blue-100">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                    <label className="flex shrink-0 items-center gap-2 text-sm whitespace-nowrap cursor-pointer select-none">
                       <input
                         type="checkbox"
                         className="accent-blue-600"
@@ -629,9 +629,9 @@ export default function ChannelsPage() {
                         已选 {checkedModels.size} / {fetchedModels.length}
                       </span>
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
                       <input
-                        className="input !py-1 !px-2 text-xs w-36"
+                        className="input !py-1 !px-2 !text-xs !w-36"
                         type="text"
                         value={modelSearch}
                         onChange={(e) => setModelSearch(e.target.value)}
