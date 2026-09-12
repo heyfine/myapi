@@ -619,9 +619,17 @@ export default function ChannelsPage() {
                       <input
                         type="checkbox"
                         className="accent-blue-600"
-                        checked={checkedModels.size === fetchedModels.length && fetchedModels.length > 0}
+                        title="勾选/取消当前搜索结果中显示的全部模型（不影响被过滤掉的勾选）"
+                        checked={filteredModels.length > 0 && filteredModels.every((m) => checkedModels.has(m))}
                         onChange={(e) =>
-                          setCheckedModels(e.target.checked ? new Set(fetchedModels) : new Set())
+                          setCheckedModels((prev) => {
+                            const next = new Set(prev);
+                            for (const m of filteredModels) {
+                              if (e.target.checked) next.add(m);
+                              else next.delete(m);
+                            }
+                            return next;
+                          })
                         }
                       />
                       <span className="font-medium">全选</span>
