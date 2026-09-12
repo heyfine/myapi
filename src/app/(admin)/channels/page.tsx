@@ -56,6 +56,8 @@ export default function ChannelsPage() {
   const [checkedModels, setCheckedModels] = useState<Set<string>>(new Set());
   const [modelTests, setModelTests] = useState<Record<string, { status: "running" | "ok" | "fail"; latency?: number; error?: string }>>({});
   const [testingAll, setTestingAll] = useState(false);
+  /** 获取模型面板的搜索词：输入后按模型名过滤显示 */
+  const [modelSearch, setModelSearch] = useState("");
   /** 模型列表浮窗：值为对应渠道，null = 关闭 */
   const [modelsModal, setModelsModal] = useState<Channel | null>(null);
 
@@ -73,6 +75,7 @@ export default function ChannelsPage() {
     setCheckedModels(new Set());
     setModelTests({});
     setShowKey(false);
+    setModelSearch("");
   }
 
   // ESC 关闭浮窗
@@ -289,6 +292,7 @@ export default function ChannelsPage() {
         setFetchedModels(res.models);
         setCheckedModels(new Set());
         setModelTests({});
+        setModelSearch("");
       }
     } catch (e) {
       alert(`获取模型失败：${(e as Error).message}`);
@@ -349,6 +353,7 @@ export default function ChannelsPage() {
     setForm({ ...form, modelsText: merged });
     setFetchedModels(null);
     setCheckedModels(new Set());
+    setModelSearch("");
   }
 
   /** 把模型映射中的对外模型名（左列）批量并入「支持的模型」文本框，自动去重，无新增则不动 */
@@ -363,6 +368,13 @@ export default function ChannelsPage() {
     if (added.length === 0) return;
     setForm({ ...form, modelsText: [...existing, ...added].join("\n") });
   }
+
+  /** 按搜索词过滤后的模型列表（空词返回全量） */
+  const filteredModels = (() => {
+    if (!fetchedModels) return [];
+    const kw = modelSearch.trim().toLowerCase();
+    return kw ? fetchedModels.filter((m) => m.toLowerCase().includes(kw)) : fetchedModels;
+  })();
 
   const BASE_URL_HINTS: Record<string, string> = {
     openai: "https://api.openai.com",
@@ -617,7 +629,14 @@ export default function ChannelsPage() {
                         已选 {checkedModels.size} / {fetchedModels.length}
                       </span>
                     </label>
-                    <div className="space-x-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input !py-1 !px-2 text-xs w-36"
+                        type="text"
+                        value={modelSearch}
+                        onChange={(e) => setModelSearch(e.target.value)}
+                        placeholder="搜索模型"
+                      />
                       <button
                         type="button"
                         className="btn-ghost !py-1 !px-2 text-xs"
@@ -640,43 +659,47 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                   <div className="max-h-48 overflow-y-auto px-3 py-2">
-                    {fetchedModels.map((m) => {
-                      const t = modelTests[m];
-                      return (
-                        <div key={m} className="flex items-center justify-between gap-2 rounded hover:bg-blue-50 px-1 py-0.5">
-                          <label className="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
-                            <input
-                              type="checkbox"
-                              className="accent-blue-600 shrink-0"
-                              checked={checkedModels.has(m)}
-                              onChange={() => toggleModel(m)}
-                            />
-                            <span className="font-mono text-xs truncate" title={m}>{m}</span>
-                          </label>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {t?.status === "ok" && (
-                              <span className="badge bg-green-100 text-green-700" title={`${t.latency}ms`}>
-                                ✓ {t.latency}ms
-                              </span>
-                            )}
-                            {t?.status === "fail" && (
-                              <span className="badge bg-red-100 text-red-700 max-w-[180px] truncate" title={t.error}>
-                                ✗ {t.error}
-                              </span>
-                            )}
-                            {t?.status === "running" && <span className="text-xs text-gray-400">测试中...</span>}
-                            <button
-                              type="button"
-                              className="btn-ghost !py-0.5 !px-1.5 text-xs"
-                              disabled={t?.status === "running" || testingAll}
-                              onClick={() => testOneModel(m)}
-                            >
-                              测试
-                            </button>
+                    {filteredModels.length === 0 ? (
+                      <div className="px-1 py-2 text-xs text-gray-400">无匹配模型</div>
+                    ) : (
+                      filteredModels.map((m) => {
+                        const t = modelTests[m];
+                        return (
+                          <div key={m} className="flex items-center justify-between gap-2 rounded hover:bg-blue-50 px-1 py-0.5">
+                            <label className="flex items-center gap-2 text-sm cursor-pointer select-none min-w-0">
+                              <input
+                                type="checkbox"
+                                className="accent-blue-600 shrink-0"
+                                checked={checkedModels.has(m)}
+                                onChange={() => toggleModel(m)}
+                              />
+                              <span className="font-mono text-xs truncate" title={m}>{m}</span>
+                            </label>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {t?.status === "ok" && (
+                                <span className="badge bg-green-100 text-green-700" title={`${t.latency}ms`}>
+                                  ✓ {t.latency}ms
+                                </span>
+                              )}
+                              {t?.status === "fail" && (
+                                <span className="badge bg-red-100 text-red-700 max-w-[180px] truncate" title={t.error}>
+                                  ✗ {t.error}
+                                </span>
+                              )}
+                              {t?.status === "running" && <span className="text-xs text-gray-400">测试中...</span>}
+                              <button
+                                type="button"
+                                className="btn-ghost !py-0.5 !px-1.5 text-xs"
+                                disabled={t?.status === "running" || testingAll}
+                                onClick={() => testOneModel(m)}
+                              >
+                                测试
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
