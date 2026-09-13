@@ -14,28 +14,44 @@ function mdOf(ms: number): string {
 }
 
 /**
- * 解析范围参数 → 窗口 [fromMs, toMs)（toMs=null 表示无上界）+ 展示文案。
- * day=今日 0 点起；week=近 7 个自然日；month=本月；custom=日期框（含 to 当日）；all=无时间限制。
- * 非法 custom 回退为 all。
+ * 解析范围参数 → 窗口 [fromMs, toMs) + 展示文案。
+ * day=所选日期当日 0 点起（date=YYYY-MM-DD，缺省今天）；week=近 7 个自然日；
+ * month=所选自然月（month=YYYY-MM，缺省本月）；custom=日期框（含 to 当日）；all=无时间限制。
+ * 非法参数回退为 all。
  */
-function resolveRange(raw: string | null, from: string | null, to: string | null): { range: RangeKey; fromMs: number | null; toMs: number | null; label: string } {
+function resolveRange(
+  raw: string | null,
+  from: string | null,
+  to: string | null,
+  dateStr: string | null,
+  monthStr: string | null,
+): { range: RangeKey; fromMs: number | null; toMs: number | null; label: string } {
   const now = new Date();
+  const midnight = (d: Date) => { d.setHours(0, 0, 0, 0); return d; };
   if (raw === "day") {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return { range: "day", fromMs: d.getTime(), toMs: null, label: `今日 ${mdOf(d.getTime())}` };
+    let dayStart = midnight(new Date(now));
+    if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // 带 T 才是本地时间解析（'YYYY-MM-DD' 裸串按 UTC，见 PROJECT_MEMORY 踩坑）
+      const d2 = new Date(`${dateStr}T00:00:00`);
+      if (!isNaN(d2.getTime())) dayStart = d2;
+    }
+    const isToday = dayStart.getTime() === midnight(new Date(now)).getTime();
+    return { range: "day", fromMs: dayStart.getTime(), toMs: dayStart.getTime() + DAY_MS, label: `${isToday ? "今日" : "按天"} ${mdOf(dayStart.getTime())}` };
   }
   if (raw === "week") {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
+    const d = midnight(new Date(now));
     d.setDate(d.getDate() - 6);
     return { range: "week", fromMs: d.getTime(), toMs: null, label: `近 7 天 ${mdOf(d.getTime())}~${mdOf(now.getTime())}` };
   }
   if (raw === "month") {
-    const d = new Date(now);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return { range: "month", fromMs: d.getTime(), toMs: null, label: `本月 ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` };
+    let m = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+      const [ys, ms] = monthStr.split("-").map(Number);
+      if (ms >= 1 && ms <= 12 && !isNaN(ys)) m = new Date(ys, ms - 1, 1);
+    }
+    const isThisMonth = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
+    const next = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+    return { range: "month", fromMs: m.getTime(), toMs: next.getTime(), label: `${isThisMonth ? "本月" : "按月"} ${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}` };
   }
   if (raw === "custom" && from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
     // 注意：必须带 T 的格式才是本地时间（'YYYY-MM-DD' 字符串按 UTC 解析，见 PROJECT_MEMORY 踩坑）
@@ -59,7 +75,7 @@ export async function GET(req: Request) {
   if (r.error) return r.error;
 
   const sp = new URL(req.url).searchParams;
-  const { range, fromMs, toMs, label: rangeLabel } = resolveRange(sp.get("range"), sp.get("from"), sp.get("to"));
+  const { range, fromMs, toMs, label: rangeLabel } = resolveRange(sp.get("range"), sp.get("from"), sp.get("to"), sp.get("date"), sp.get("month"));
 
   const dayAgo = new Date(Date.now() - 86400000);
   const userScope = r.user.role !== "admin" ? eq(logs.userId, r.user.id) : undefined;
@@ -133,7 +149,8 @@ export async function GET(req: Request) {
       .get();
     rangeFromMs = minRow?.min ?? null;
   }
-  const rangeToMs = toMs ?? Date.now();
+  // 趋势上界钳制到当前时间：选今天/本月时未来小时、天不生成空桶；过去日期/月保留完整窗口
+  const rangeToMs = Math.min(toMs ?? Date.now(), Date.now());
   let trend: ReturnType<typeof buildRangeTrend> = [];
   let trendGranularity: Granularity = "day";
   if (rangeFromMs !== null && rangeToMs > rangeFromMs) {

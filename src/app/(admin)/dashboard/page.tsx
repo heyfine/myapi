@@ -34,15 +34,22 @@ type Stats = {
 type RangeKey = "day" | "week" | "month" | "custom" | "all";
 
 const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; title: string }> = [
-  { key: "day", label: "按天", title: "今日 0 点至今" },
+  { key: "day", label: "按天", title: "选择任意一天查看（按小时桶）" },
   { key: "week", label: "近7天", title: "近 7 个自然日（含今天）" },
-  { key: "month", label: "按月", title: "本月 1 号至今" },
+  { key: "month", label: "按月", title: "选择任意自然月查看（按天桶）" },
   { key: "custom", label: "自定义", title: "自选起止日期" },
   { key: "all", label: "全部", title: "不限时间" },
 ];
 
-/** 指标卡标签前缀：累计类卡片跟随所选范围 */
-const CARD_PREFIX: Record<RangeKey, string> = { all: "", day: "今日", week: "近 7 天", month: "本月", custom: "所选范围" };
+/** 指标卡标签前缀：累计类卡片跟随所选范围（按天/按月显示所选日期/月份） */
+function cardPrefix(range: RangeKey, dayDate: string, monthVal: string): string {
+  const now = new Date();
+  if (range === "all") return "";
+  if (range === "week") return "近 7 天";
+  if (range === "custom") return "所选范围";
+  if (range === "day") return dayDate === ymd(now) ? "今日" : dayDate.slice(5).replace("-", "/");
+  return monthVal === ymd(now).slice(0, 7) ? "本月" : monthVal;
+}
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -63,17 +70,36 @@ export default function DashboardPage() {
   const [range, setRange] = useState<RangeKey>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  /** 「按天」选中的日期（YYYY-MM-DD，默认今天）与「按月」选中的月份（YYYY-MM，默认本月） */
+  const [dayDate, setDayDate] = useState(() => ymd(new Date()));
+  const [monthVal, setMonthVal] = useState(() => ymd(new Date()).slice(0, 7));
+  /** 日期选择浮层是否在按钮下方展开 */
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
 
-  /** 点「自定义」时预填最近 30 天，避免空日期框出现即无数据 */
+  const NEEDS_PICKER = (key: RangeKey) => key === "day" || key === "month" || key === "custom";
+
+  /** 点范围按钮：需要选日期的展开浮层；再点已激活按钮收起/展开 */
   function chooseRange(key: RangeKey): void {
+    if (key === range && NEEDS_PICKER(key)) {
+      setPickerOpen(!pickerOpen);
+      return;
+    }
     if (key === "custom" && !customFrom) {
       const now = new Date();
       setCustomFrom(ymd(new Date(now.getTime() - 29 * 86400000)));
       setCustomTo(ymd(now));
     }
     setRange(key);
+    setPickerOpen(NEEDS_PICKER(key));
   }
+
+  // 浮层展开时聚焦选择框（不自动 showPicker：原生面板弹出后关闭会误点透明遮罩把浮层收起）
+  useEffect(() => {
+    if (!pickerOpen) return;
+    pickerRef.current?.focus();
+  }, [pickerOpen, range]);
 
   // 5s 轮询：不可见时跳过（后台标签不白烧）；请求序号保证只有最新一次响应能落状态（防慢响应把数字改回去）
   useEffect(() => {
@@ -82,8 +108,10 @@ export default function DashboardPage() {
     function load(): void {
       if (document.visibilityState !== "visible") return;
       const seq = ++seqRef.current;
-      const q =
-        range === "custom" && customFrom && customTo ? `?range=custom&from=${customFrom}&to=${customTo}` : `?range=${range}`;
+      let q = `?range=${range}`;
+      if (range === "custom" && customFrom && customTo) q = `?range=custom&from=${customFrom}&to=${customTo}`;
+      else if (range === "day" && dayDate) q = `?range=day&date=${dayDate}`;
+      else if (range === "month" && monthVal) q = `?range=month&month=${monthVal}`;
       api<Stats>(`/api/stats${q}`)
         .then((data) => {
           if (!alive || seq !== seqRef.current) return;
@@ -108,7 +136,7 @@ export default function DashboardPage() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [range, customFrom, customTo]);
+  }, [range, customFrom, customTo, dayDate, monthVal]);
 
   const filteredModels = (stats?.allModels ?? []).filter((m) =>
     m.toLowerCase().includes(modelFilter.toLowerCase()),
@@ -119,7 +147,7 @@ export default function DashboardPage() {
   const daily = stats?.daily ?? [];
 
   // 累计类卡片跟随全局范围；「近 24h」两卡与模型列表、用量表、Top10 固定不受影响
-  const prefix = CARD_PREFIX[range];
+  const prefix = cardPrefix(range, dayDate, monthVal);
   const cards = stats
     ? [
         { label: `${prefix || "总"}调用次数`, value: String(stats.overall.total), accent: "#6366f1", text: "text-indigo-600" },
@@ -147,39 +175,82 @@ export default function DashboardPage() {
         <h1 className="text-xl font-bold">仪表盘</h1>
         <div className="flex items-center gap-2 flex-wrap">
           {/* 全局时间范围：控制顶部累计指标卡与趋势图（模型列表/近24h卡/用量表不受影响） */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
-            {RANGE_OPTIONS.map((o) => (
-              <button
-                key={o.key}
-                title={o.title}
-                className={`px-3 py-1 cursor-pointer transition-colors ${
-                  range === o.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-                onClick={() => chooseRange(o.key)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          {range === "custom" && (
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <input
-                type="date"
-                className="input !w-[136px] !py-1 !px-2 !text-xs"
-                value={customFrom}
-                max={customTo || undefined}
-                onChange={(e) => e.target.value && setCustomFrom(e.target.value)}
-              />
-              <span>~</span>
-              <input
-                type="date"
-                className="input !w-[136px] !py-1 !px-2 !text-xs"
-                value={customTo}
-                min={customFrom || undefined}
-                onChange={(e) => e.target.value && setCustomTo(e.target.value)}
-              />
+          <div className="relative">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {RANGE_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  title={o.title}
+                  className={`px-3 py-1 cursor-pointer transition-colors ${
+                    range === o.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  onClick={() => chooseRange(o.key)}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
-          )}
+            {pickerOpen && NEEDS_PICKER(range) && (
+              <>
+                {/* 透明遮罩：点浮层外任意处收起 */}
+                <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 rounded-lg border border-gray-200 bg-white px-2.5 py-2 shadow-lg">
+                  {range === "day" && (
+                    <input
+                      ref={pickerRef}
+                      type="date"
+                      className="input !w-[152px] !py-1 !px-2 !text-xs"
+                      value={dayDate}
+                      max={ymd(new Date())}
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        setDayDate(e.target.value);
+                        setPickerOpen(false);
+                      }}
+                    />
+                  )}
+                  {range === "month" && (
+                    <input
+                      ref={pickerRef}
+                      type="month"
+                      className="input !w-[152px] !py-1 !px-2 !text-xs"
+                      value={monthVal}
+                      max={ymd(new Date()).slice(0, 7)}
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        setMonthVal(e.target.value);
+                        setPickerOpen(false);
+                      }}
+                    />
+                  )}
+                  {range === "custom" && (
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <input
+                        ref={pickerRef}
+                        type="date"
+                        className="input !w-[140px] !py-1 !px-2 !text-xs"
+                        value={customFrom}
+                        max={customTo || undefined}
+                        onChange={(e) => e.target.value && setCustomFrom(e.target.value)}
+                      />
+                      <span>~</span>
+                      <input
+                        type="date"
+                        className="input !w-[140px] !py-1 !px-2 !text-xs"
+                        value={customTo}
+                        min={customFrom || undefined}
+                        onChange={(e) => {
+                          if (!e.target.value) return;
+                          setCustomTo(e.target.value);
+                          setPickerOpen(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <div className="text-xs text-gray-400">
             {error && stats
               ? "刷新失败，保留上次数据"
