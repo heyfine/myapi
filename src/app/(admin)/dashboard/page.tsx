@@ -34,10 +34,10 @@ type Stats = {
 type RangeKey = "day" | "week" | "month" | "custom" | "all";
 
 const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; title: string }> = [
-  { key: "day", label: "按天", title: "选择任意一天查看（按小时桶）" },
+  { key: "day", label: "按天", title: "查看任意一天（点击弹出日期选择，按小时桶）" },
   { key: "week", label: "近7天", title: "近 7 个自然日（含今天）" },
-  { key: "month", label: "按月", title: "选择任意自然月查看（按天桶）" },
-  { key: "custom", label: "自定义", title: "自选起止日期" },
+  { key: "month", label: "按月", title: "查看任意自然月（点击弹出月份选择，按天桶）" },
+  { key: "custom", label: "自定义", title: "自选起止日期（依次弹起始/结束日期选择）" },
   { key: "all", label: "全部", title: "不限时间" },
 ];
 
@@ -68,38 +68,40 @@ export default function DashboardPage() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [modelFilter, setModelFilter] = useState("");
   const [range, setRange] = useState<RangeKey>("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  /** 自定义起止日期：初始化预填最近 30 天（隐藏锚定输入需要带值，原生面板才能显示当前选择） */
+  const [customFrom, setCustomFrom] = useState(() => ymd(new Date(Date.now() - 29 * 86400000)));
+  const [customTo, setCustomTo] = useState(() => ymd(new Date()));
   /** 「按天」选中的日期（YYYY-MM-DD，默认今天）与「按月」选中的月份（YYYY-MM，默认本月） */
   const [dayDate, setDayDate] = useState(() => ymd(new Date()));
   const [monthVal, setMonthVal] = useState(() => ymd(new Date()).slice(0, 7));
-  /** 日期选择浮层是否在按钮下方展开 */
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef<HTMLInputElement>(null);
+  /**
+   * 零尺寸隐藏输入，锚定在按钮组正下方：点范围按钮时同步 showPicker() 直接弹原生日期面板
+   * （面板就出现在按钮下方，无需额外的浮层框）。
+   */
+  const dayPickerRef = useRef<HTMLInputElement>(null);
+  const monthPickerRef = useRef<HTMLInputElement>(null);
+  const fromPickerRef = useRef<HTMLInputElement>(null);
+  const toPickerRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
 
-  const NEEDS_PICKER = (key: RangeKey) => key === "day" || key === "month" || key === "custom";
-
-  /** 点范围按钮：需要选日期的展开浮层；再点已激活按钮收起/展开 */
-  function chooseRange(key: RangeKey): void {
-    if (key === range && NEEDS_PICKER(key)) {
-      setPickerOpen(!pickerOpen);
-      return;
+  function showPicker(ref: React.RefObject<HTMLInputElement | null>): void {
+    try {
+      ref.current?.showPicker();
+    } catch {
+      /* 非用户手势或浏览器不支持时静默（按钮点击路径均有激活，正常不会走到） */
     }
-    if (key === "custom" && !customFrom) {
-      const now = new Date();
-      setCustomFrom(ymd(new Date(now.getTime() - 29 * 86400000)));
-      setCustomTo(ymd(now));
-    }
-    setRange(key);
-    setPickerOpen(NEEDS_PICKER(key));
   }
 
-  // 浮层展开时聚焦选择框（不自动 showPicker：原生面板弹出后关闭会误点透明遮罩把浮层收起）
-  useEffect(() => {
-    if (!pickerOpen) return;
-    pickerRef.current?.focus();
-  }, [pickerOpen, range]);
+  /** 点范围按钮：激活范围并直接弹出对应的原生日期面板 */
+  function chooseRange(key: RangeKey): void {
+    setRange(key);
+    if (key === "day") showPicker(dayPickerRef);
+    else if (key === "month") showPicker(monthPickerRef);
+    else if (key === "custom") {
+      // 首次点自定义弹起始日期（选完 from 的 onChange 自动接弹 to）；已激活时再点直接弹结束日期，方便只调 to
+      showPicker(range === "custom" ? toPickerRef : fromPickerRef);
+    }
+  }
 
   // 5s 轮询：不可见时跳过（后台标签不白烧）；请求序号保证只有最新一次响应能落状态（防慢响应把数字改回去）
   useEffect(() => {
@@ -190,66 +192,47 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-            {pickerOpen && NEEDS_PICKER(range) && (
-              <>
-                {/* 透明遮罩：点浮层外任意处收起 */}
-                <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
-                <div className="absolute left-0 top-full z-20 mt-1 rounded-lg border border-gray-200 bg-white px-2.5 py-2 shadow-lg">
-                  {range === "day" && (
-                    <input
-                      ref={pickerRef}
-                      type="date"
-                      className="input !w-[152px] !py-1 !px-2 !text-xs"
-                      value={dayDate}
-                      max={ymd(new Date())}
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        setDayDate(e.target.value);
-                        setPickerOpen(false);
-                      }}
-                    />
-                  )}
-                  {range === "month" && (
-                    <input
-                      ref={pickerRef}
-                      type="month"
-                      className="input !w-[152px] !py-1 !px-2 !text-xs"
-                      value={monthVal}
-                      max={ymd(new Date()).slice(0, 7)}
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        setMonthVal(e.target.value);
-                        setPickerOpen(false);
-                      }}
-                    />
-                  )}
-                  {range === "custom" && (
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <input
-                        ref={pickerRef}
-                        type="date"
-                        className="input !w-[140px] !py-1 !px-2 !text-xs"
-                        value={customFrom}
-                        max={customTo || undefined}
-                        onChange={(e) => e.target.value && setCustomFrom(e.target.value)}
-                      />
-                      <span>~</span>
-                      <input
-                        type="date"
-                        className="input !w-[140px] !py-1 !px-2 !text-xs"
-                        value={customTo}
-                        min={customFrom || undefined}
-                        onChange={(e) => {
-                          if (!e.target.value) return;
-                          setCustomTo(e.target.value);
-                          setPickerOpen(false);
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+            {/* 零尺寸锚定输入：showPicker 的原生面板会贴在按钮组正下方弹出，无需可见框 */}
+            <input
+              ref={dayPickerRef}
+              type="date"
+              aria-label="选择查看日期"
+              className="pointer-events-none absolute left-0 top-full h-0 w-0 border-0 opacity-0"
+              value={dayDate}
+              max={ymd(new Date())}
+              onChange={(e) => e.target.value && setDayDate(e.target.value)}
+            />
+            <input
+              ref={monthPickerRef}
+              type="month"
+              aria-label="选择查看月份"
+              className="pointer-events-none absolute left-0 top-full h-0 w-0 border-0 opacity-0"
+              value={monthVal}
+              max={ymd(new Date()).slice(0, 7)}
+              onChange={(e) => e.target.value && setMonthVal(e.target.value)}
+            />
+            <input
+              ref={fromPickerRef}
+              type="date"
+              aria-label="自定义起始日期"
+              className="pointer-events-none absolute left-0 top-full h-0 w-0 border-0 opacity-0"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                setCustomFrom(e.target.value);
+                showPicker(toPickerRef); // 选完起始日接着选结束日
+              }}
+            />
+            <input
+              ref={toPickerRef}
+              type="date"
+              aria-label="自定义结束日期"
+              className="pointer-events-none absolute left-0 top-full h-0 w-0 border-0 opacity-0"
+              value={customTo}
+              min={customFrom}
+              onChange={(e) => e.target.value && setCustomTo(e.target.value)}
+            />
           </div>
           <div className="text-xs text-gray-400">
             {error && stats
