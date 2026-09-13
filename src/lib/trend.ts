@@ -147,3 +147,101 @@ export function buildMinutelyTrend(seriesExpr: SeriesExpr, scope?: SQL): TrendPo
     return { date: `${hh}:${mm}`, label: `${hh}:${mm}`, ...buckets.get(ts)! };
   });
 }
+
+/* ============ 全局时间范围（仪表盘范围选择器）============ */
+
+const HOUR_MS = 3600000;
+const DAY_MS = 86400000;
+
+/** 范围桶粒度 */
+export type Granularity = "hour" | "day" | "month";
+
+/** 按窗口长度自动选粒度：≤48h 按小时，≤31 天按天，更长按月 */
+export function pickGranularity(fromMs: number, toMs: number): Granularity {
+  const span = toMs - fromMs;
+  if (span <= 48 * HOUR_MS) return "hour";
+  if (span <= 31 * DAY_MS) return "day";
+  return "month";
+}
+
+/** 本地时区的 YYYY-MM */
+function localMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** 零填充上限（超出保留最近的）：hour 49 / day 400 / month 240，防自定义到 1970 年造出巨量空桶 */
+const RANGE_CAP: Record<Granularity, number> = { hour: 49, day: 400, month: 240 };
+
+/** 生成窗口内的桶起点序列（本地时区日历边界） */
+function rangeStarts(fromMs: number, toMs: number, granularity: Granularity): number[] {
+  const lastEnd = toMs - 1;
+  const starts: number[] = [];
+  if (granularity === "hour") {
+    const end = Math.floor(lastEnd / HOUR_MS) * HOUR_MS;
+    const first = Math.max(Math.floor(fromMs / HOUR_MS) * HOUR_MS, end - (RANGE_CAP.hour - 1) * HOUR_MS);
+    for (let t = first; t <= end; t += HOUR_MS) starts.push(t);
+  } else if (granularity === "day") {
+    const d = new Date(fromMs);
+    d.setHours(0, 0, 0, 0);
+    const e = new Date(lastEnd);
+    e.setHours(0, 0, 0, 0);
+    const first = Math.max(d.getTime(), e.getTime() - (RANGE_CAP.day - 1) * DAY_MS);
+    for (let t = first; t <= e.getTime(); t += DAY_MS) starts.push(t);
+  } else {
+    const s = new Date(fromMs);
+    const e = new Date(lastEnd);
+    let y = e.getFullYear();
+    let m = e.getMonth();
+    const months: number[] = [];
+    for (;;) {
+      months.unshift(new Date(y, m, 1).getTime());
+      if (y === s.getFullYear() && m === s.getMonth()) break;
+      m--;
+      if (m < 0) { m = 11; y--; }
+      if (months.length >= RANGE_CAP.month) break;
+    }
+    starts.push(...months);
+  }
+  return starts;
+}
+
+/**
+ * 范围趋势：[fromMs, 至] 窗口内按粒度聚合（本地时区切桶，与 localtime 修饰符同口径）。
+ * 返回零填充的 TrendPoint（month 粒度 label/date 为 YYYY-MM；day 为 YYYY-MM-DD；hour 为 HH时）。
+ */
+export function buildRangeTrend(
+  fromMs: number,
+  toMs: number,
+  granularity: Granularity,
+  seriesExpr: SeriesExpr,
+  scope?: SQL,
+): TrendPoint[] {
+  const starts = rangeStarts(fromMs, toMs, granularity);
+  if (starts.length === 0) return [];
+  const keyOf = (ts: number): string => {
+    if (granularity === "hour") return String(ts);
+    const d = new Date(ts);
+    return granularity === "day" ? localDateKey(d) : localMonthKey(d);
+  };
+  const bucketExpr =
+    granularity === "hour"
+      ? sql`(${logs.createdAt} / ${HOUR_MS}) * ${HOUR_MS}`
+      : granularity === "day"
+        ? sql`date(${logs.createdAt} / 1000, 'unixepoch', 'localtime')`
+        : sql`strftime('%Y-%m', ${logs.createdAt} / 1000, 'unixepoch', 'localtime')`;
+
+  const buckets = new Map<string, TrendBucket>();
+  for (const ts of starts) buckets.set(keyOf(ts), emptyBucket());
+  for (const row of groupedTrend(bucketExpr, new Date(starts[0]), seriesExpr, scope)) {
+    const b = buckets.get(String(row.bucket));
+    if (b) mergeBucket(b, row);
+  }
+
+  return starts.map((ts) => {
+    const d = new Date(ts);
+    const key = keyOf(ts);
+    const label =
+      granularity === "hour" ? `${String(d.getHours()).padStart(2, "0")}时` : granularity === "day" ? key.slice(5).replace("-", "/") : key;
+    return { date: key, label, ...buckets.get(key)! };
+  });
+}

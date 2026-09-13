@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { VChart } from "@visactor/react-vchart";
 
 export interface TrendPoint {
@@ -19,6 +19,7 @@ export type DailyPoint = TrendPoint;
 
 type Metric = "count" | "tokens" | "cost";
 type Tab = "trend" | "pie" | "rank";
+type View = "range" | "day" | "hour" | "minute";
 
 const METRICS: Array<{ key: Metric; label: string; yField: string }> = [
   { key: "count", label: "调用次数", yField: "次数" },
@@ -43,18 +44,31 @@ export default function TrendChart({
   hourly,
   minutely,
   seriesName = "模型",
+  rangeTrend,
+  rangeLabel,
 }: {
   daily: TrendPoint[];
   hourly: TrendPoint[];
   minutely: TrendPoint[];
   /** 序列维度名称：仪表盘=模型，模型详情页=渠道 */
   seriesName?: string;
+  /** 全局范围趋势（仪表盘用）：按所选范围聚合、粒度自适应；不传则不出现「按范围」按钮 */
+  rangeTrend?: TrendPoint[] | null;
+  /** 范围描述（如「本月 · 按天」），变化时趋势图自动切到按范围视图 */
+  rangeLabel?: string;
 }) {
-  const [view, setView] = useState<"day" | "hour" | "minute">("day");
+  const [view, setView] = useState<View>(rangeTrend?.length ? "range" : "day");
   const [metric, setMetric] = useState<Metric>("count");
   const [tab, setTab] = useState<Tab>("trend");
 
-  const data = view === "day" ? daily : view === "hour" ? hourly : minutely;
+  // 用户切换全局范围（rangeLabel 变化）时，趋势图自动跳到「按范围」视图；手动点实时按钮后不再抢回
+  const prevRangeLabel = useRef(rangeLabel);
+  useEffect(() => {
+    if (rangeLabel && rangeLabel !== prevRangeLabel.current) setView("range");
+    prevRangeLabel.current = rangeLabel;
+  }, [rangeLabel]);
+
+  const data = view === "range" ? (rangeTrend ?? []) : view === "day" ? daily : view === "hour" ? hourly : minutely;
   const yField = METRICS.find((m) => m.key === metric)!.yField;
 
   // 展开为长表：每个时间桶 × 每个序列一行
@@ -90,7 +104,8 @@ export default function TrendChart({
   }, [data]);
 
   const metricLabel = METRICS.find((m) => m.key === metric)!.label;
-  const rangeText = view === "day" ? "近 14 天" : view === "hour" ? "近 24 小时" : "近 60 分钟";
+  const rangeText =
+    view === "range" ? (rangeLabel ?? "所选范围") : view === "day" ? "近 14 天" : view === "hour" ? "近 24 小时" : "近 60 分钟";
 
   // 趋势：按序列堆叠面积图；y 轴与 tooltip 千分位见 NUM_FMT 说明
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -186,32 +201,27 @@ export default function TrendChart({
     <div>
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* 粒度切换 */}
+          {/* 粒度切换：有全局范围数据时多一个「按范围」（窗口自适应粒度） */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
-            <button
-              className={`px-3 py-1 cursor-pointer transition-colors ${
-                view === "day" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              onClick={() => setView("day")}
-            >
-              按天
-            </button>
-            <button
-              className={`px-3 py-1 cursor-pointer transition-colors ${
-                view === "hour" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              onClick={() => setView("hour")}
-            >
-              按小时
-            </button>
-            <button
-              className={`px-3 py-1 cursor-pointer transition-colors ${
-                view === "minute" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              onClick={() => setView("minute")}
-            >
-              按分钟
-            </button>
+            {(
+              [
+                ...(rangeTrend && rangeTrend.length > 0 ? [{ key: "range" as View, label: "按范围", title: rangeLabel ?? "" }] : []),
+                { key: "day" as View, label: "按天", title: "固定窗口：近 14 天" },
+                { key: "hour" as View, label: "按小时", title: "固定窗口：近 24 小时" },
+                { key: "minute" as View, label: "按分钟", title: "固定窗口：近 60 分钟" },
+              ] as Array<{ key: View; label: string; title: string }>
+            ).map((b) => (
+              <button
+                key={b.key}
+                title={b.title}
+                className={`px-3 py-1 cursor-pointer transition-colors ${
+                  view === b.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+                onClick={() => setView(b.key)}
+              >
+                {b.label}
+              </button>
+            ))}
           </div>
           {/* 指标切换（仅趋势图需要） */}
           {tab === "trend" && (

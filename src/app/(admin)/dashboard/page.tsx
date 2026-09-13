@@ -7,6 +7,7 @@ import TrendChart, { type DailyPoint } from "@/components/TrendChart";
 import UsageTable from "@/components/UsageTable";
 
 type Stats = {
+  range?: string;
   overall: {
     total: number;
     success: number;
@@ -24,8 +25,28 @@ type Stats = {
   daily: DailyPoint[];
   hourly: DailyPoint[];
   minutely: DailyPoint[];
+  trend: DailyPoint[];
+  trendGranularity: "hour" | "day" | "month";
+  trendLabel: string;
   allModels: string[];
 };
+
+type RangeKey = "day" | "week" | "month" | "custom" | "all";
+
+const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; title: string }> = [
+  { key: "day", label: "按天", title: "今日 0 点至今" },
+  { key: "week", label: "近7天", title: "近 7 个自然日（含今天）" },
+  { key: "month", label: "按月", title: "本月 1 号至今" },
+  { key: "custom", label: "自定义", title: "自选起止日期" },
+  { key: "all", label: "全部", title: "不限时间" },
+];
+
+/** 指标卡标签前缀：累计类卡片跟随所选范围 */
+const CARD_PREFIX: Record<RangeKey, string> = { all: "", day: "今日", week: "近 7 天", month: "本月", custom: "所选范围" };
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function fmt(n: number): string {
   return n.toLocaleString("zh-CN");
@@ -39,7 +60,20 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [modelFilter, setModelFilter] = useState("");
+  const [range, setRange] = useState<RangeKey>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const seqRef = useRef(0);
+
+  /** 点「自定义」时预填最近 30 天，避免空日期框出现即无数据 */
+  function chooseRange(key: RangeKey): void {
+    if (key === "custom" && !customFrom) {
+      const now = new Date();
+      setCustomFrom(ymd(new Date(now.getTime() - 29 * 86400000)));
+      setCustomTo(ymd(now));
+    }
+    setRange(key);
+  }
 
   // 5s 轮询：不可见时跳过（后台标签不白烧）；请求序号保证只有最新一次响应能落状态（防慢响应把数字改回去）
   useEffect(() => {
@@ -48,7 +82,9 @@ export default function DashboardPage() {
     function load(): void {
       if (document.visibilityState !== "visible") return;
       const seq = ++seqRef.current;
-      api<Stats>("/api/stats")
+      const q =
+        range === "custom" && customFrom && customTo ? `?range=custom&from=${customFrom}&to=${customTo}` : `?range=${range}`;
+      api<Stats>(`/api/stats${q}`)
         .then((data) => {
           if (!alive || seq !== seqRef.current) return;
           setStats(data);
@@ -72,7 +108,7 @@ export default function DashboardPage() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [range, customFrom, customTo]);
 
   const filteredModels = (stats?.allModels ?? []).filter((m) =>
     m.toLowerCase().includes(modelFilter.toLowerCase()),
@@ -82,20 +118,22 @@ export default function DashboardPage() {
 
   const daily = stats?.daily ?? [];
 
+  // 累计类卡片跟随全局范围；「近 24h」两卡与模型列表、用量表、Top10 固定不受影响
+  const prefix = CARD_PREFIX[range];
   const cards = stats
     ? [
-        { label: "总调用次数", value: String(stats.overall.total), accent: "#6366f1", text: "text-indigo-600" },
+        { label: `${prefix || "总"}调用次数`, value: String(stats.overall.total), accent: "#6366f1", text: "text-indigo-600" },
         {
           label: "成功率",
           value: stats.overall.total > 0 ? `${((stats.overall.success / stats.overall.total) * 100).toFixed(1)}%` : "-",
           accent: "#10b981",
           text: "text-emerald-600",
         },
-        { label: "累计消费", value: `$${usd(stats.overall.cost)}`, accent: "#8b5cf6", text: "text-violet-600" },
+        { label: `${prefix || "累计"}消费`, value: `$${usd(stats.overall.cost)}`, accent: "#8b5cf6", text: "text-violet-600" },
         { label: "近 24h 调用", value: String(stats.today.total), accent: "#0ea5e9", text: "text-sky-600" },
         { label: "近 24h 消费", value: `$${usd(stats.today.cost)}`, accent: "#f97316", text: "text-orange-600" },
         {
-          label: "总 Tokens",
+          label: `${prefix || "总"} Tokens`,
           value: `${fmt(stats.overall.promptTokens + stats.overall.completionTokens)}`,
           accent: "#f43f5e",
           text: "text-rose-600",
@@ -107,10 +145,46 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-xl font-bold">仪表盘</h1>
-        <div className="text-xs text-gray-400">
-          {error && stats
-            ? "刷新失败，保留上次数据"
-            : `每 ${POLL_INTERVAL / 1000} 秒自动刷新${updatedAt ? ` · 更新于 ${updatedAt.toLocaleTimeString("zh-CN", { hour12: false })}` : ""}`}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 全局时间范围：控制顶部累计指标卡与趋势图（模型列表/近24h卡/用量表不受影响） */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+            {RANGE_OPTIONS.map((o) => (
+              <button
+                key={o.key}
+                title={o.title}
+                className={`px-3 py-1 cursor-pointer transition-colors ${
+                  range === o.key ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+                onClick={() => chooseRange(o.key)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {range === "custom" && (
+            <div className="flex items-center gap-1 text-xs text-gray-500">
+              <input
+                type="date"
+                className="input !w-[136px] !py-1 !px-2 !text-xs"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => e.target.value && setCustomFrom(e.target.value)}
+              />
+              <span>~</span>
+              <input
+                type="date"
+                className="input !w-[136px] !py-1 !px-2 !text-xs"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => e.target.value && setCustomTo(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="text-xs text-gray-400">
+            {error && stats
+              ? "刷新失败，保留上次数据"
+              : `每 ${POLL_INTERVAL / 1000} 秒自动刷新${updatedAt ? ` · 更新于 ${updatedAt.toLocaleTimeString("zh-CN", { hour12: false })}` : ""}`}
+          </div>
         </div>
       </div>
       {error && !stats && <div className="text-red-600 text-sm">{error}</div>}
@@ -126,7 +200,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="card">
-        <div className="font-semibold mb-3">Token 用量统计（累计）</div>
+        <div className="font-semibold mb-3">Token 用量统计（{prefix || "累计"}）</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* 输入：含缓存命中/未命中细分 */}
           <div className="rounded-xl border border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-white px-4 py-4 text-center">
@@ -169,9 +243,15 @@ export default function DashboardPage() {
       </div>
 
       <div className="card">
-        <div className="font-semibold mb-3">趋势（按天 / 按小时 / 按分钟）</div>
-        {daily.length > 0 || (stats?.hourly.length ?? 0) > 0 || (stats?.minutely.length ?? 0) > 0 ? (
-          <TrendChart daily={daily} hourly={stats?.hourly ?? []} minutely={stats?.minutely ?? []} />
+        <div className="font-semibold mb-3">趋势（按范围 / 按天 / 按小时 / 按分钟）</div>
+        {daily.length > 0 || (stats?.trend.length ?? 0) > 0 || (stats?.hourly.length ?? 0) > 0 || (stats?.minutely.length ?? 0) > 0 ? (
+          <TrendChart
+            daily={daily}
+            hourly={stats?.hourly ?? []}
+            minutely={stats?.minutely ?? []}
+            rangeTrend={stats?.trend ?? []}
+            rangeLabel={stats?.trendLabel}
+          />
         ) : (
           <div className="text-sm text-gray-400 py-8 text-center">暂无数据</div>
         )}
