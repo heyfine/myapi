@@ -5,6 +5,7 @@ data/
 *.tsbuildinfo
 next-env.d.ts
 .zcode/
+.freebuff/
 
 # 本地文稿（不进任何远程仓库）
 docs/promo-article.md
