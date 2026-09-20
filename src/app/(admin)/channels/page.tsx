@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api, time } from "@/lib/client-utils";
 import ChannelModelsModal from "@/components/ChannelModelsModal";
 
@@ -28,6 +28,59 @@ const TYPE_LABELS: Record<string, string> = {
   anthropic: "Anthropic (Claude)",
   gemini: "Google Gemini",
 };
+
+/** 渠道分组键：剥掉名称尾部的序号/版本号（如 商汤-02、商汤（1）、商汤 v2），剩余前缀相同的归为一组 */
+function groupKey(name: string): string {
+  const original = name.trim();
+  let key = original;
+  for (;;) {
+    const next = key
+      .replace(/[0-9０-９]+[\s\-_·#()（）]*$/, "") // 尾部序号
+      .replace(/[\s\-_·#()（）]+$/, "") // 尾部分隔符
+      .replace(/(^|[\s\-_·])[vV]$/, "$1"); // 版本号残留（v2 剩下的 v）
+    if (/[.。]$/.test(next)) break; // 版本小数（如 Claude 3.5）不算序号，保留全名
+    if (!next || next === key) break;
+    key = next;
+  }
+  return key || original;
+}
+
+type ChannelGroup = { key: string; channels: Channel[] };
+
+/** 按分组键聚组：保持各组首次出现的顺序，组内维持原有排序（优先级/新在前） */
+function groupChannels(list: Channel[]): ChannelGroup[] {
+  const groups: ChannelGroup[] = [];
+  const indexOf = new Map<string, number>();
+  for (const c of list) {
+    const key = groupKey(c.name);
+    const i = indexOf.get(key);
+    if (i === undefined) {
+      indexOf.set(key, groups.length);
+      groups.push({ key, channels: [c] });
+    } else {
+      groups[i].channels.push(c);
+    }
+  }
+  return groups;
+}
+
+/** 分组渲染：2 个及以上的组先插入一条全宽分组标题行；单渠道组不加标题，避免列表膨胀 */
+function renderGrouped(list: Channel[], renderRow: (c: Channel) => ReactNode): ReactNode[] {
+  return groupChannels(list).flatMap((g) =>
+    g.channels.length >= 2
+      ? [
+          <tr key={`group:${g.key}`} className="bg-gray-50/70">
+            <td colSpan={9} className="px-3 py-2 text-sm font-semibold text-gray-600">
+              <span className="mr-2 inline-block h-3.5 w-1 rounded-sm bg-indigo-400 align-[-2px]" />
+              {g.key}
+              <span className="ml-2 text-xs font-normal text-gray-400">{g.channels.length} 个渠道</span>
+            </td>
+          </tr>,
+          ...g.channels.map(renderRow),
+        ]
+      : g.channels.map(renderRow),
+  );
+}
 
 const emptyForm = {
   id: 0,
@@ -522,7 +575,7 @@ export default function ChannelsPage() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => (
+            {renderGrouped(list, (c) => (
               <tr key={c.id}>
                 <td className="td font-medium">{c.name}</td>
                 <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
@@ -615,7 +668,7 @@ export default function ChannelsPage() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => (
+            {renderGrouped(list, (c) => (
               <tr key={c.id}>
                 <td className="td font-medium">{c.name}</td>
                 <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
