@@ -64,12 +64,14 @@ SQLite 需要可写本地文件，Vercel Serverless 文件系统只读且临时�
 - [ ] 用真实渠道做一次流式调用冒烟通过
 - [ ] data/gateway.db 已纳入备份计划
 
-## 实际生产部署（Oracle 云服务器，2026-08-30 已上线）
+## 实际生产部署（云服务器，2026-09-20 迁移至新 IP）
 
-- 主机：甲骨文 ARM 云服务器（Ubuntu 22.04 / aarch64），部署目录 `/root/myapi`，容器名 `llm-gateway`，端口 3777
+- 主机：云服务器（Ubuntu / aarch64，主机名 ubuntu），**IP `217.142.237.44`**（2026-09-20 从旧机 141.147.147.93 迁移，旧机已下线），SSH 端口 53770，密钥 `~/.ssh/id_ed25519_codex`；服务器同机跑有其他生产服务（vaultwarden/wordpress/litellm 等），docker build 务必 nohup 后台执行
+- 本机直连该服务器 SSH **实测可通**（2026-09-20）；若直连超时，可走本机 SOCKS5 代理：`ssh -o ProxyCommand='connect -S 127.0.0.1:10808 %h %p'`（Git 自带 connect.exe）
+- 部署目录 `/root/myapi`，容器名 `llm-gateway`，端口 3777
 - 部署形态：`docker compose`（bind mount `/root/myapi/data:/app/data`），源码为**非 git 目录**（GitHub 仓库为私有，服务器无凭据，升级走"本地 `git archive` 打包 → scp → 解包"传输，见下方"升级 SOP"）
 - `.env` 在 `/root/myapi/.env`（仅 GATEWAY_SECRET，64 位强随机）。**升级/换机时绝不能丢**——换了它，渠道 Key 密文全部解不开
-- 入口脚本只在 `gateway.db` 不存在时才跑 init-db，因此升级重建容器**不动数据**
+- 入口脚本只在 `gateway.db` 不存在时才跑 init-db，因此升级重建容器**不动数据**；schema 变更（如 2026-09-20 渠道归档的 archived/archived_at 列）在**旧容器还运行时用新镜像以在线 DDL 补列**（见 SOP 第 2.5 步），消除"新代码查旧表"的报错窗口
 
 ### 升级 SOP（2026-08-30 实操验证过一次，全程 ~35 分钟）
 
@@ -81,7 +83,19 @@ scp -P 53770 myapi.tar.gz root@服务器:/tmp/
 # 2) 服务器：解包到新目录 + 拷 .env + 预构建（不影响运行中的旧容器）
 mkdir /root/myapi-new && tar -xzf /tmp/myapi.tar.gz -C /root/myapi-new
 cp -p /root/myapi/.env /root/myapi-new/.env
-cd /root/myapi-new && docker build -t myapi-myapi:latest .
+# 源码标记预检：grep 本次新功能的英文标记，确认包里是新代码
+grep -c "archived" /root/myapi-new/src/lib/schema.ts
+
+# 2.5) 若本次含 schema 变更：趁旧容器还在运行，用新镜像做在线 DDL 补列
+#      （SQLite ADD COLUMN 秒级在线；新容器启动即有新列，避免报错窗口）
+docker run --rm --entrypoint node -v /root/myapi/data:/app/data myapi-myapi:latest -e "
+const db=require('better-sqlite3')('/app/data/gateway.db');
+const cols=db.prepare('PRAGMA table_info(channels)').all().map(c=>c.name);
+if(!cols.includes('archived')){db.exec('ALTER TABLE channels ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')}
+if(!cols.includes('archived_at')){db.exec('ALTER TABLE channels ADD COLUMN archived_at INTEGER')}
+console.log('migrated:',db.prepare('PRAGMA table_info(channels)').all().map(c=>c.name).join(','))"
+
+docker build -t myapi-myapi:latest /root/myapi-new   # 实操建议 nohup 后台构建，防 SSH 断连带走构建
 docker tag myapi-myapi:latest myapi-myapi:v-rollback-$(date +%Y%m%d-%H%M)   # 回滚点
 
 # 3) 停机窗口（分钟级）：
