@@ -30,21 +30,8 @@ const TYPE_LABELS: Record<string, string> = {
   gemini: "Google Gemini",
 };
 
-/** 渠道分组键：优先用供应商字段；未填则剥掉名称尾部的序号/版本号（如 商汤-02、商汤（1）、商汤 v2），剩余前缀相同的归为一组 */
-export function groupKey(name: string): string {
-  const original = name.trim();
-  let key = original;
-  for (;;) {
-    const next = key
-      .replace(/[0-9０-９]+[\s\-_·#()（）]*$/, "") // 尾部序号
-      .replace(/[\s\-_·#()（）]+$/, "") // 尾部分隔符
-      .replace(/(^|[\s\-_·])[vV]$/, "$1"); // 版本号残留（v2 剩下的 v）
-    if (/[.。]$/.test(next)) break; // 版本小数（如 Claude 3.5）不算序号，保留全名
-    if (!next || next === key) break;
-    key = next;
-  }
-  return key || original;
-}
+/** 未填供应商的渠道统一归入「未分组」 */
+const UNGROUPED_LABEL = "未分组";
 
 type ChannelGroup = { key: string; channels: Channel[] };
 
@@ -53,8 +40,8 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
   const groups: ChannelGroup[] = [];
   const indexOf = new Map<string, number>();
   for (const c of list) {
-    // 分组优先级：显式供应商 > 名称前缀启发式；groupKey 返回的字符串同时用作标题行显示名
-    const key = c.supplier?.trim() || groupKey(c.name);
+    // 分组键：显式供应商；未填则归入「未分组」，同时用作标题行显示名
+    const key = c.supplier?.trim() || UNGROUPED_LABEL;
     const i = indexOf.get(key);
     if (i === undefined) {
       indexOf.set(key, groups.length);
@@ -66,10 +53,10 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
   return groups;
 }
 
-/** 分组渲染：2 个及以上的组先插入一条全宽分组标题行；单渠道组不加标题，避免列表膨胀 */
+/** 分组渲染：2 个及以上的组插入全宽分组标题行；「未分组」即使只有 1 个渠道也显示标题 */
 function renderGrouped(list: Channel[], renderRow: (c: Channel) => ReactNode): ReactNode[] {
   return groupChannels(list).flatMap((g) =>
-    g.channels.length >= 2
+    g.channels.length >= 2 || g.key === UNGROUPED_LABEL
       ? [
           <tr key={`group:${g.key}`} className="bg-gray-50/70">
             <td colSpan={9} className="px-3 py-2 text-sm font-semibold text-gray-600">
@@ -767,7 +754,7 @@ export default function ChannelsPage() {
                 className="input"
                 value={form.supplier}
                 onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                placeholder="如 商汤；同名供应商的渠道会归入同一分组，留空则按名称自动分组"
+                placeholder="如 商汤；同名供应商的渠道会归入同一分组，留空则归入未分组"
               />
             </div>
             <div>

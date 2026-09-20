@@ -142,7 +142,7 @@ export async function POST(req: Request) {
       tx.insert(channels)
         .values({
           name: c.name,
-          // 旧备份无该字段视为空（分组回退名称前缀）
+          // 旧备份无该字段视为空（归入未分组）
           supplier: c.supplier ?? "",
           type: c.type,
           baseUrl: c.baseUrl.replace(/\/+$/, ""),
