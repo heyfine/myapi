@@ -204,6 +204,71 @@ export default function ChannelsPage() {
     setTesting(null);
   }
 
+  /** 测试列单元格（含进度与逐模型结果面板）：正常列表与归档页共用 */
+  function renderTestCell(c: Channel) {
+    return (
+      <td className="td max-w-[280px]">
+        <button className="btn-ghost !py-1 !px-2 text-xs" disabled={testing === c.id} onClick={() => test(c)}>
+          {testing === c.id
+            ? (() => {
+                const t = channelTests[c.id];
+                return t && t.total > 1 ? `测试中 ${t.done}/${t.total}` : "测试中";
+              })()
+            : (() => {
+                let n = 0;
+                try {
+                  n = (JSON.parse(c.models) as string[]).length;
+                } catch {
+                  /* ignore */
+                }
+                return n > 1 ? `连通测试 (${n} 个模型)` : "连通测试";
+              })()}
+        </button>
+        {testResult[c.id] && <div className="text-xs mt-1 text-gray-500">{testResult[c.id]}</div>}
+        {channelTests[c.id] && (
+          <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2 py-1">
+            {(() => {
+              let models: string[] = [];
+              try {
+                models = JSON.parse(c.models);
+              } catch {
+                /* ignore */
+              }
+              const t = channelTests[c.id];
+              const okCount = models.filter((m) => t.results[m]?.ok).length;
+              return (
+                <>
+                  <div className="text-[11px] text-gray-400 pb-1">
+                    可用 {okCount} / {t.total}
+                  </div>
+                  {models.map((m) => {
+                    const r = t.results[m];
+                    return (
+                      <div key={m} className="flex items-center gap-1.5 text-[11px] leading-5">
+                        <span className="font-mono truncate max-w-[120px]" title={m}>
+                          {m}
+                        </span>
+                        {!r ? (
+                          <span className="text-gray-300">…</span>
+                        ) : r.ok ? (
+                          <span className="text-green-600 whitespace-nowrap">✓ {r.latency}ms</span>
+                        ) : (
+                          <span className="text-red-500 truncate max-w-[130px]" title={r.error}>
+                            ✗ {r.error}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </div>
+        )}
+      </td>
+    );
+  }
+
   /** 复制渠道：把全部配置（含已保存的 API Key）带入新建表单 */
   async function duplicate(c: Channel) {
     let models: string[] = [];
@@ -495,65 +560,7 @@ export default function ChannelsPage() {
                     {c.status ? "启用" : "停用"}
                   </span>
                 </td>
-                <td className="td max-w-[280px]">
-                  <button className="btn-ghost !py-1 !px-2 text-xs" disabled={testing === c.id} onClick={() => test(c)}>
-                    {testing === c.id
-                      ? (() => {
-                          const t = channelTests[c.id];
-                          return t && t.total > 1 ? `测试中 ${t.done}/${t.total}` : "测试中";
-                        })()
-                      : (() => {
-                          let n = 0;
-                          try {
-                            n = (JSON.parse(c.models) as string[]).length;
-                          } catch {
-                            /* ignore */
-                          }
-                          return n > 1 ? `连通测试 (${n} 个模型)` : "连通测试";
-                        })()}
-                  </button>
-                  {testResult[c.id] && <div className="text-xs mt-1 text-gray-500">{testResult[c.id]}</div>}
-                  {channelTests[c.id] && (
-                    <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/60 px-2 py-1">
-                      {(() => {
-                        let models: string[] = [];
-                        try {
-                          models = JSON.parse(c.models);
-                        } catch {
-                          /* ignore */
-                        }
-                        const t = channelTests[c.id];
-                        const okCount = models.filter((m) => t.results[m]?.ok).length;
-                        return (
-                          <>
-                            <div className="text-[11px] text-gray-400 pb-1">
-                              可用 {okCount} / {t.total}
-                            </div>
-                            {models.map((m) => {
-                              const r = t.results[m];
-                              return (
-                                <div key={m} className="flex items-center gap-1.5 text-[11px] leading-5">
-                                  <span className="font-mono truncate max-w-[120px]" title={m}>
-                                    {m}
-                                  </span>
-                                  {!r ? (
-                                    <span className="text-gray-300">…</span>
-                                  ) : r.ok ? (
-                                    <span className="text-green-600 whitespace-nowrap">✓ {r.latency}ms</span>
-                                  ) : (
-                                    <span className="text-red-500 truncate max-w-[130px]" title={r.error}>
-                                      ✗ {r.error}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </td>
+                {renderTestCell(c)}
                 <td className="td space-x-2 whitespace-nowrap">
                   <button className="text-blue-600 text-sm hover:underline cursor-pointer" onClick={() => edit(c)}>
                     编辑
@@ -602,6 +609,7 @@ export default function ChannelsPage() {
               <th className="th">模型</th>
               <th className="th">优先级</th>
               <th className="th">状态</th>
+              <th className="th">测试</th>
               <th className="th">归档时间</th>
               <th className="th">操作</th>
             </tr>
@@ -636,6 +644,7 @@ export default function ChannelsPage() {
                     {c.status ? "启用" : "停用"}
                   </span>
                 </td>
+                {renderTestCell(c)}
                 <td className="td text-xs text-gray-500 whitespace-nowrap">{c.archivedAt ? time(c.archivedAt) : "-"}</td>
                 <td className="td space-x-2 whitespace-nowrap">
                   <button className="text-blue-600 text-sm hover:underline cursor-pointer" onClick={() => edit(c)}>
@@ -659,7 +668,7 @@ export default function ChannelsPage() {
             ))}
             {list.length === 0 && (
               <tr>
-                <td className="td text-gray-400" colSpan={8}>
+                <td className="td text-gray-400" colSpan={9}>
                   暂无归档渠道
                 </td>
               </tr>
