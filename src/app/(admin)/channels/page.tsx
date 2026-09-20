@@ -33,6 +33,27 @@ const TYPE_LABELS: Record<string, string> = {
 /** 未填供应商的渠道统一归入「未分组」 */
 const UNGROUPED_LABEL = "未分组";
 
+/** 类型徽标配色：每种协议类型一个色系，列表里一眼区分 */
+const TYPE_BADGES: Record<string, string> = {
+  openai: "bg-emerald-50 text-emerald-600",
+  "openai-compatible": "bg-sky-50 text-sky-600",
+  anthropic: "bg-orange-50 text-orange-600",
+  gemini: "bg-fuchsia-50 text-fuchsia-600",
+};
+
+/** 解析渠道的模型列表：JSON 优先，兼容历史逗号/换行裸文本 */
+function parseModels(raw: string): string[] {
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.map(String) : [];
+  } catch {
+    return raw
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+}
+
 type ChannelGroup = { key: string; channels: Channel[] };
 
 /** 按分组键聚组：保持各组首次出现的顺序，组内维持原有排序（优先级/新在前） */
@@ -50,19 +71,28 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
       groups[i].channels.push(c);
     }
   }
-  return groups;
+  // 「未分组」固定置顶，其余各组保持首次出现顺序
+  return groups.sort((a, b) => (a.key === UNGROUPED_LABEL ? -1 : b.key === UNGROUPED_LABEL ? 1 : 0));
 }
 
 /** 分组渲染：2 个及以上的组插入全宽分组标题行；「未分组」即使只有 1 个渠道也显示标题 */
-function renderGrouped(list: Channel[], renderRow: (c: Channel) => ReactNode): ReactNode[] {
+function renderGrouped(list: Channel[], colSpan: number, renderRow: (c: Channel) => ReactNode): ReactNode[] {
   return groupChannels(list).flatMap((g) =>
     g.channels.length >= 2 || g.key === UNGROUPED_LABEL
       ? [
-          <tr key={`group:${g.key}`} className="bg-gray-50/70">
-            <td colSpan={9} className="px-3 py-2 text-sm font-semibold text-gray-600">
-              <span className="mr-2 inline-block h-3.5 w-1 rounded-sm bg-indigo-400 align-[-2px]" />
-              {g.key}
-              <span className="ml-2 text-xs font-normal text-gray-400">{g.channels.length} 个渠道</span>
+          <tr key={`group:${g.key}`} className={g.key === UNGROUPED_LABEL ? "bg-gray-50" : "bg-indigo-50/60"}>
+            <td colSpan={colSpan} className="px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`h-4 w-1 rounded-full ${g.key === UNGROUPED_LABEL ? "bg-gray-400" : "bg-indigo-500"}`} />
+                <span className="text-sm font-semibold text-gray-800">{g.key}</span>
+                <span
+                  className={`badge border text-[11px] ${
+                    g.key === UNGROUPED_LABEL ? "border-gray-200 bg-white text-gray-500" : "border-indigo-100 bg-white text-indigo-500"
+                  }`}
+                >
+                  {g.channels.length} 个渠道
+                </span>
+              </div>
             </td>
           </tr>,
           ...g.channels.map(renderRow),
@@ -545,6 +575,14 @@ export default function ChannelsPage() {
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
 
+      {view === "active" && list.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="badge border border-gray-200 bg-white px-3 py-1 text-gray-600">共 {list.length} 个渠道</span>
+          <span className="badge border border-green-100 bg-green-50 px-3 py-1 text-green-600">启用 {list.filter((c) => c.status).length}</span>
+          <span className="badge border border-gray-200 bg-white px-3 py-1 text-gray-400">停用 {list.filter((c) => !c.status).length}</span>
+        </div>
+      )}
+
       {view === "archived" && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
           以下渠道已归档：不再出现在渠道列表，也不参与网关转发与统计。可编辑、复制、彻底删除或恢复。
@@ -557,10 +595,8 @@ export default function ChannelsPage() {
           <thead>
             <tr>
               <th className="th">名称</th>
-              <th className="th">类型</th>
-              <th className="th">Base URL</th>
+              <th className="th">接入点</th>
               <th className="th">模型</th>
-              <th className="th">代理</th>
               <th className="th">优先级</th>
               <th className="th">状态</th>
               <th className="th">测试</th>
@@ -568,70 +604,67 @@ export default function ChannelsPage() {
             </tr>
           </thead>
           <tbody>
-            {renderGrouped(list, (c) => (
+            {renderGrouped(list, 7, (c) => (
               <tr key={c.id}>
-                <td className="td font-medium">
-                  {c.name}
-                  {c.supplier && <span className="badge ml-1.5 bg-indigo-50 text-indigo-500">{c.supplier}</span>}
+                <td className="td">
+                  <div className="font-semibold text-gray-900">
+                    {c.name}
+                    {c.supplier && <span className="badge ml-1.5 bg-indigo-50/70 text-indigo-500 text-[10px] font-normal">{c.supplier}</span>}
+                  </div>
+                  <div className="mt-1">
+                    <span className={`badge ${TYPE_BADGES[c.type] ?? "bg-gray-100 text-gray-600"}`}>{TYPE_LABELS[c.type] ?? c.type}</span>
+                  </div>
                 </td>
-                <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
-                <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
-                  {c.baseUrl}
+                <td className="td font-mono text-xs">
+                  <div className="max-w-[220px] truncate text-gray-600" title={c.baseUrl}>
+                    {c.baseUrl}
+                  </div>
+                  <div className="mt-1">
+                    {c.proxy ? (
+                      <span className="badge bg-purple-50 font-mono text-[10px] text-purple-600" title={c.proxy}>
+                        {c.proxy.replace(/\/\/[^@]*@/, "//***@")}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">直连</span>
+                    )}
+                  </div>
                 </td>
-                <td className="td font-mono text-xs max-w-[240px]">
+                <td className="td max-w-[240px]">
                   <button
                     type="button"
-                    className="block w-full text-left truncate cursor-pointer hover:text-blue-600"
+                    className="group flex w-full items-center gap-1.5 text-left cursor-pointer"
                     title="点击查看该渠道的全部模型"
                     onClick={() => setModelsModal(c)}
                   >
-                    {(() => {
-                      try {
-                        return JSON.parse(c.models).join(", ");
-                      } catch {
-                        return c.models;
-                      }
-                    })()}
+                    <span className="badge shrink-0 bg-indigo-50 text-indigo-500 text-[10px]">{parseModels(c.models).length} 个</span>
+                    <span className="truncate font-mono text-xs text-gray-500 group-hover:text-blue-600">{parseModels(c.models).join(", ")}</span>
                   </button>
                 </td>
-                <td className="td font-mono text-xs max-w-[140px] truncate" title={c.proxy || undefined}>
-                  {c.proxy ? (
-                    <span className="badge bg-purple-50 text-purple-600 font-mono text-[10px]">
-                      {c.proxy.replace(/\/\/[^@]*@/, "//***@")}
-                    </span>
-                  ) : (
-                    <span className="text-gray-300 text-xs">直连</span>
-                  )}
+                <td className="td font-mono text-gray-600">
+                  <div>{c.priority}</div>
+                  <div className="mt-1 text-xs text-gray-400">权重 {c.weight}</div>
                 </td>
-                <td className="td">{c.priority}</td>
                 <td className="td">
-                  <span className={`badge ${c.status ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}`}>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.status ? "text-green-600" : "text-gray-400"}`}>
+                    <span className={`h-2 w-2 rounded-full ${c.status ? "bg-green-500" : "bg-gray-300"}`} />
                     {c.status ? "启用" : "停用"}
                   </span>
                 </td>
                 {renderTestCell(c)}
-                <td className="td space-x-2 whitespace-nowrap">
-                  <button className="text-blue-600 text-sm hover:underline cursor-pointer" onClick={() => edit(c)}>
+                <td className="td space-x-3 whitespace-nowrap text-sm">
+                  <button className="text-indigo-600 hover:underline cursor-pointer" onClick={() => edit(c)}>
                     编辑
                   </button>
-                  <button
-                    className="text-indigo-500 text-sm hover:underline cursor-pointer"
-                    title="复制该渠道的全部配置为新渠道"
-                    onClick={() => duplicate(c)}
-                  >
+                  <button className="text-gray-500 hover:underline cursor-pointer" title="复制该渠道的全部配置为新渠道" onClick={() => duplicate(c)}>
                     复制
                   </button>
-                  <button className="text-gray-500 text-sm hover:underline cursor-pointer" onClick={() => toggle(c)}>
+                  <button className="text-gray-500 hover:underline cursor-pointer" onClick={() => toggle(c)}>
                     {c.status ? "停用" : "启用"}
                   </button>
-                  <button
-                    className="text-amber-600 text-sm hover:underline cursor-pointer"
-                    title="移出列表并停止转发，可在归档页恢复"
-                    onClick={() => archive(c)}
-                  >
+                  <button className="text-gray-500 hover:underline cursor-pointer" title="移出列表并停止转发，可在归档页恢复" onClick={() => archive(c)}>
                     归档
                   </button>
-                  <button className="text-red-500 text-sm hover:underline cursor-pointer" onClick={() => remove(c)}>
+                  <button className="text-red-500 hover:underline cursor-pointer" onClick={() => remove(c)}>
                     删除
                   </button>
                 </td>
@@ -639,7 +672,7 @@ export default function ChannelsPage() {
             ))}
             {list.length === 0 && (
               <tr>
-                <td className="td text-gray-400" colSpan={9}>
+                <td className="td py-12 text-center text-gray-400" colSpan={7}>
                   还没有渠道，点击右上角"新建渠道"添加第一个供应商
                 </td>
               </tr>
@@ -653,8 +686,7 @@ export default function ChannelsPage() {
           <thead>
             <tr>
               <th className="th">名称</th>
-              <th className="th">类型</th>
-              <th className="th">Base URL</th>
+              <th className="th">接入点</th>
               <th className="th">模型</th>
               <th className="th">优先级</th>
               <th className="th">状态</th>
@@ -664,55 +696,65 @@ export default function ChannelsPage() {
             </tr>
           </thead>
           <tbody>
-            {renderGrouped(list, (c) => (
+            {renderGrouped(list, 8, (c) => (
               <tr key={c.id}>
-                <td className="td font-medium">
-                  {c.name}
-                  {c.supplier && <span className="badge ml-1.5 bg-indigo-50 text-indigo-500">{c.supplier}</span>}
+                <td className="td">
+                  <div className="font-semibold text-gray-900">
+                    {c.name}
+                    {c.supplier && <span className="badge ml-1.5 bg-indigo-50/70 text-indigo-500 text-[10px] font-normal">{c.supplier}</span>}
+                  </div>
+                  <div className="mt-1">
+                    <span className={`badge ${TYPE_BADGES[c.type] ?? "bg-gray-100 text-gray-600"}`}>{TYPE_LABELS[c.type] ?? c.type}</span>
+                  </div>
                 </td>
-                <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
-                <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
-                  {c.baseUrl}
+                <td className="td font-mono text-xs">
+                  <div className="max-w-[220px] truncate text-gray-600" title={c.baseUrl}>
+                    {c.baseUrl}
+                  </div>
+                  <div className="mt-1">
+                    {c.proxy ? (
+                      <span className="badge bg-purple-50 font-mono text-[10px] text-purple-600" title={c.proxy}>
+                        {c.proxy.replace(/\/\/[^@]*@/, "//***@")}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">直连</span>
+                    )}
+                  </div>
                 </td>
-                <td className="td font-mono text-xs max-w-[240px]">
+                <td className="td max-w-[240px]">
                   <button
                     type="button"
-                    className="block w-full text-left truncate cursor-pointer hover:text-blue-600"
+                    className="group flex w-full items-center gap-1.5 text-left cursor-pointer"
                     title="点击查看该渠道的全部模型"
                     onClick={() => setModelsModal(c)}
                   >
-                    {(() => {
-                      try {
-                        return JSON.parse(c.models).join(", ");
-                      } catch {
-                        return c.models;
-                      }
-                    })()}
+                    <span className="badge shrink-0 bg-indigo-50 text-indigo-500 text-[10px]">{parseModels(c.models).length} 个</span>
+                    <span className="truncate font-mono text-xs text-gray-500 group-hover:text-blue-600">{parseModels(c.models).join(", ")}</span>
                   </button>
                 </td>
-                <td className="td">{c.priority}</td>
+                <td className="td font-mono text-gray-600">
+                  <div>{c.priority}</div>
+                  <div className="mt-1 text-xs text-gray-400">权重 {c.weight}</div>
+                </td>
                 <td className="td">
-                  <span className={`badge ${c.status ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}`}>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.status ? "text-green-600" : "text-gray-400"}`}>
+                    <span className={`h-2 w-2 rounded-full ${c.status ? "bg-green-500" : "bg-gray-300"}`} />
                     {c.status ? "启用" : "停用"}
                   </span>
                 </td>
                 {renderTestCell(c)}
                 <td className="td text-xs text-gray-500 whitespace-nowrap">{c.archivedAt ? time(c.archivedAt) : "-"}</td>
-                <td className="td space-x-2 whitespace-nowrap">
-                  <button className="text-blue-600 text-sm hover:underline cursor-pointer" onClick={() => edit(c)}>
+                <td className="td space-x-3 whitespace-nowrap text-sm">
+                  <button className="text-indigo-600 hover:underline cursor-pointer" onClick={() => edit(c)}>
                     编辑
                   </button>
-                  <button
-                    className="text-indigo-500 text-sm hover:underline cursor-pointer"
-                    title="复制该渠道的全部配置为新渠道"
-                    onClick={() => duplicate(c)}
-                  >
+                  <button className="text-gray-500 hover:underline cursor-pointer" title="复制该渠道的全部配置为新渠道" onClick={() => duplicate(c)}>
                     复制
                   </button>
-                  <button className="text-green-600 text-sm hover:underline cursor-pointer" onClick={() => restore(c)}>
+                  <button className="text-green-600 hover:underline cursor-pointer" onClick={() => restore(c)}>
                     恢复
                   </button>
-                  <button className="text-red-500 text-sm hover:underline cursor-pointer" onClick={() => remove(c)}>
+                  <button className="text-red-500 hover:underline cursor-pointer" onClick={() => remove(c)}>
                     删除
                   </button>
                 </td>
@@ -720,7 +762,7 @@ export default function ChannelsPage() {
             ))}
             {list.length === 0 && (
               <tr>
-                <td className="td text-gray-400" colSpan={9}>
+                <td className="td py-12 text-center text-gray-400" colSpan={8}>
                   暂无归档渠道
                 </td>
               </tr>
