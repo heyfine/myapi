@@ -38,7 +38,7 @@ function parseModelMapping(raw: string | null | undefined): Record<string, strin
 /** 上游状态码：网络层/限流/服务端错误都触发切换下一渠道 */
 const FAILOVER_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504]);
 
-/** 按模型选出候选渠道：优先级降序，同优先级按权重随机 */
+/** 按模型选出候选渠道：优先级降序，同优先级按权重随机（归档渠道不参与路由） */
 export function selectChannels(model: string): Channel[] {
   const list = db
     .select()
@@ -46,6 +46,7 @@ export function selectChannels(model: string): Channel[] {
     .where(
       and(
         eq(channels.status, 1),
+        eq(channels.archived, 0),
         sql`EXISTS (SELECT 1 FROM json_each(${channels.models}) WHERE json_each.value = ${model})`,
       ),
     )

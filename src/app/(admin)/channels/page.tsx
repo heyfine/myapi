@@ -15,6 +15,8 @@ type Channel = {
   priority: number;
   weight: number;
   status: number;
+  archived: number;
+  archivedAt: string | null;
   createdAt: string;
 };
 
@@ -43,6 +45,8 @@ const emptyForm = {
 
 export default function ChannelsPage() {
   const [list, setList] = useState<Channel[]>([]);
+  /** 视图：active 正常渠道列表；archived 归档页 */
+  const [view, setView] = useState<"active" | "archived">("active");
   const [form, setForm] = useState<typeof emptyForm | null>(null);
   const [error, setError] = useState("");
   const [testing, setTesting] = useState<number | null>(null);
@@ -62,10 +66,10 @@ export default function ChannelsPage() {
   const [modelsModal, setModelsModal] = useState<Channel | null>(null);
 
   const load = useCallback(() => {
-    api<{ data: Channel[] }>("/api/channels")
+    api<{ data: Channel[] }>(view === "archived" ? "/api/channels?archived=1" : "/api/channels")
       .then((d) => setList(d.data))
       .catch((e) => setError(e.message));
-  }, []);
+  }, [view]);
   useEffect(load, [load]);
 
   /** 关闭浮窗并重置所有临时状态；仅通过 ✕ / ESC / 取消 触发 */
@@ -121,7 +125,9 @@ export default function ChannelsPage() {
       setCheckedModels(new Set());
       setModelTests({});
       setShowKey(false);
-      load();
+      // 归档页里复制/新建的渠道是全新未归档渠道，保存后切回列表让用户立刻看到
+      if (!form.id && view === "archived") setView("active");
+      else load();
     } catch (e) {
       alert((e as Error).message);
     }
@@ -135,6 +141,19 @@ export default function ChannelsPage() {
   async function remove(c: Channel) {
     if (!confirm(`确认删除渠道「${c.name}」？`)) return;
     await api(`/api/channels/${c.id}`, { method: "DELETE" });
+    load();
+  }
+
+  /** 归档：不删除配置，移出列表与网关路由，可在归档页恢复 */
+  async function archive(c: Channel) {
+    if (!confirm(`归档渠道「${c.name}」？归档后不再参与转发，可随时在归档页恢复。`)) return;
+    await api(`/api/channels/${c.id}`, { method: "PUT", body: JSON.stringify({ archived: 1 }) });
+    load();
+  }
+
+  /** 从归档页恢复到正常列表 */
+  async function restore(c: Channel) {
+    await api(`/api/channels/${c.id}`, { method: "PUT", body: JSON.stringify({ archived: 0 }) });
     load();
   }
 
@@ -386,13 +405,42 @@ export default function ChannelsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">渠道管理</h1>
-        <button className="btn-primary" onClick={() => { setFetchedModels(null); setCheckedModels(new Set()); setModelTests({}); setShowKey(false); setForm({ ...emptyForm }); }}>
-          + 新建渠道
-        </button>
+        <h1 className="text-xl font-bold">{view === "archived" ? "归档" : "渠道管理"}</h1>
+        <div className="flex items-center space-x-2">
+          {view === "active" ? (
+            <>
+              <button className="btn-ghost" onClick={() => setView("archived")}>
+                归档
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setFetchedModels(null);
+                  setCheckedModels(new Set());
+                  setModelTests({});
+                  setShowKey(false);
+                  setForm({ ...emptyForm });
+                }}
+              >
+                + 新建渠道
+              </button>
+            </>
+          ) : (
+            <button className="btn-ghost" onClick={() => setView("active")}>
+              返回渠道列表
+            </button>
+          )}
+        </div>
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
 
+      {view === "archived" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          以下渠道已归档：不再出现在渠道列表，也不参与网关转发与统计。可编辑、复制、彻底删除或恢复。
+        </div>
+      )}
+
+      {view === "active" ? (
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
@@ -520,6 +568,89 @@ export default function ChannelsPage() {
                   <button className="text-gray-500 text-sm hover:underline cursor-pointer" onClick={() => toggle(c)}>
                     {c.status ? "停用" : "启用"}
                   </button>
+                  <button
+                    className="text-amber-600 text-sm hover:underline cursor-pointer"
+                    title="移出列表并停止转发，可在归档页恢复"
+                    onClick={() => archive(c)}
+                  >
+                    归档
+                  </button>
+                  <button className="text-red-500 text-sm hover:underline cursor-pointer" onClick={() => remove(c)}>
+                    删除
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {list.length === 0 && (
+              <tr>
+                <td className="td text-gray-400" colSpan={9}>
+                  还没有渠道，点击右上角"新建渠道"添加第一个供应商
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      ) : (
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[900px]">
+          <thead>
+            <tr>
+              <th className="th">名称</th>
+              <th className="th">类型</th>
+              <th className="th">Base URL</th>
+              <th className="th">模型</th>
+              <th className="th">优先级</th>
+              <th className="th">状态</th>
+              <th className="th">归档时间</th>
+              <th className="th">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((c) => (
+              <tr key={c.id}>
+                <td className="td font-medium">{c.name}</td>
+                <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
+                <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
+                  {c.baseUrl}
+                </td>
+                <td className="td font-mono text-xs max-w-[240px]">
+                  <button
+                    type="button"
+                    className="block w-full text-left truncate cursor-pointer hover:text-blue-600"
+                    title="点击查看该渠道的全部模型"
+                    onClick={() => setModelsModal(c)}
+                  >
+                    {(() => {
+                      try {
+                        return JSON.parse(c.models).join(", ");
+                      } catch {
+                        return c.models;
+                      }
+                    })()}
+                  </button>
+                </td>
+                <td className="td">{c.priority}</td>
+                <td className="td">
+                  <span className={`badge ${c.status ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}`}>
+                    {c.status ? "启用" : "停用"}
+                  </span>
+                </td>
+                <td className="td text-xs text-gray-500 whitespace-nowrap">{c.archivedAt ? time(c.archivedAt) : "-"}</td>
+                <td className="td space-x-2 whitespace-nowrap">
+                  <button className="text-blue-600 text-sm hover:underline cursor-pointer" onClick={() => edit(c)}>
+                    编辑
+                  </button>
+                  <button
+                    className="text-indigo-500 text-sm hover:underline cursor-pointer"
+                    title="复制该渠道的全部配置为新渠道"
+                    onClick={() => duplicate(c)}
+                  >
+                    复制
+                  </button>
+                  <button className="text-green-600 text-sm hover:underline cursor-pointer" onClick={() => restore(c)}>
+                    恢复
+                  </button>
                   <button className="text-red-500 text-sm hover:underline cursor-pointer" onClick={() => remove(c)}>
                     删除
                   </button>
@@ -529,13 +660,14 @@ export default function ChannelsPage() {
             {list.length === 0 && (
               <tr>
                 <td className="td text-gray-400" colSpan={8}>
-                  还没有渠道，点击右上角"新建渠道"添加第一个供应商
+                  暂无归档渠道
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      )}
 
       {form && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

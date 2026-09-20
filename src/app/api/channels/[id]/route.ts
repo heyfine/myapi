@@ -57,6 +57,11 @@ export async function PUT(req: Request, ctx: Ctx) {
   if (body.priority !== undefined) updates.priority = Number(body.priority) || 0;
   if (body.weight !== undefined) updates.weight = Math.max(1, Number(body.weight) || 1);
   if (body.status !== undefined) updates.status = Number(body.status) ? 1 : 0;
+  // 归档/恢复：归档记录时间，恢复清空时间；不改 status，恢复后保持原启停状态
+  if (body.archived !== undefined) {
+    updates.archived = body.archived ? 1 : 0;
+    updates.archivedAt = body.archived ? new Date() : null;
+  }
   if (body.modelMapping !== undefined) {
     const mapping = normalizeMapping(body.modelMapping);
     if (!mapping.ok) return Response.json({ error: mapping.error }, { status: 400 });

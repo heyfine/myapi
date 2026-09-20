@@ -45,6 +45,8 @@ export async function GET() {
         priority: c.priority,
         weight: c.weight,
         status: c.status,
+        archived: c.archived,
+        archivedAt: c.archivedAt ? c.archivedAt.getTime() : null,
       };
     }),
     users: userRows,

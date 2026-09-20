@@ -14,6 +14,8 @@ interface BackupChannel {
   priority?: number;
   weight?: number;
   status?: number;
+  archived?: number;
+  archivedAt?: number | null;
 }
 interface BackupUser {
   username: string;
@@ -148,6 +150,9 @@ export async function POST(req: Request) {
           priority: c.priority ?? 0,
           weight: Math.max(1, c.weight ?? 1),
           status: c.status ?? 1,
+          // 归档状态：旧备份（v1/v2 无该字段）视为未归档
+          archived: c.archived ? 1 : 0,
+          archivedAt: c.archivedAt ? new Date(c.archivedAt) : null,
         })
         .run();
       counts.channels++;

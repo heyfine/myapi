@@ -159,8 +159,12 @@ export async function GET(req: Request) {
   }
   const gText = trendGranularity === "hour" ? "按小时" : trendGranularity === "month" ? "按月" : "按天";
 
-  // 全部模型（来自启用的渠道），供仪表盘模型列表展示
-  const enabledChannels = db.select({ models: channels.models }).from(channels).where(eq(channels.status, 1)).all();
+  // 全部模型（来自启用且未归档的渠道），供仪表盘模型列表展示
+  const enabledChannels = db
+    .select({ models: channels.models })
+    .from(channels)
+    .where(and(eq(channels.status, 1), eq(channels.archived, 0)))
+    .all();
   const modelSet = new Set<string>();
   for (const c of enabledChannels) {
     try {

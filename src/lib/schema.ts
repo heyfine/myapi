@@ -25,6 +25,8 @@ export const channels = sqliteTable("channels", {
   priority: integer("priority").notNull().default(0), // 数字越大越优先
   weight: integer("weight").notNull().default(1),
   status: integer("status").notNull().default(1), // 1 启用 0 停用
+  archived: integer("archived").notNull().default(0), // 1 归档（不参与路由/统计，仅在归档页可见）
+  archivedAt: integer("archived_at", { mode: "timestamp_ms" }), // 归档时间；未归档为 null
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 });
 

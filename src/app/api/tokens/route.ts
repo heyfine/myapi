@@ -24,7 +24,8 @@ export async function POST(req: Request) {
   const expiredDays = Number(body?.expiredDays) || 0;
 
   const { key, hash, prefix } = generateTokenKey();
-  const id = db
+  // returning() 本身返回 { id } 对象，这里取平避免响应嵌套成 { id: { id } }
+  const row = db
     .insert(tokens)
     .values({
       userId: r.user.id,
@@ -37,5 +38,5 @@ export async function POST(req: Request) {
     })
     .returning({ id: tokens.id })
     .get();
-  return Response.json({ id, key }); // 完整 key 只在此刻返回一次
+  return Response.json({ id: row.id, key }); // 完整 key 只在此刻返回一次
 }

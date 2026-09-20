@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     .where(
       and(
         eq(channels.status, 1),
+        eq(channels.archived, 0),
         inArray(channels.type, EMBED_TYPES),
         sql`EXISTS (SELECT 1 FROM json_each(${channels.models}) WHERE json_each.value = ${body.model})`,
       ),

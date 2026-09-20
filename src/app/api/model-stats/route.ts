@@ -76,6 +76,7 @@ export async function GET(req: Request) {
       .from(channels)
       .where(
         and(
+          eq(channels.archived, 0),
           sql`EXISTS (SELECT 1 FROM json_each(${channels.models}) WHERE json_each.value = ${model})`,
         ),
       )

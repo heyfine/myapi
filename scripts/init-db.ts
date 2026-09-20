@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS channels (
   priority INTEGER NOT NULL DEFAULT 0,
   weight INTEGER NOT NULL DEFAULT 1,
   status INTEGER NOT NULL DEFAULT 1,
+  archived INTEGER NOT NULL DEFAULT 0,
+  archived_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS tokens (
@@ -118,6 +120,14 @@ if (!channelCols.includes("model_mapping")) {
 if (!channelCols.includes("proxy")) {
   db.exec("ALTER TABLE channels ADD COLUMN proxy TEXT NOT NULL DEFAULT ''");
   console.log("已迁移: channels 增加 proxy 列");
+}
+if (!channelCols.includes("archived")) {
+  db.exec("ALTER TABLE channels ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  console.log("已迁移: channels 增加 archived 列");
+}
+if (!channelCols.includes("archived_at")) {
+  db.exec("ALTER TABLE channels ADD COLUMN archived_at INTEGER");
+  console.log("已迁移: channels 增加 archived_at 列");
 }
 
 // 旧库迁移：logs 补充 Token 分类统计列

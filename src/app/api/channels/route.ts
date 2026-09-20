@@ -26,10 +26,17 @@ function normalizeMapping(input: unknown): { ok: true; json: string } | { ok: fa
   return { ok: true, json: JSON.stringify(obj) };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const r = await requireAdmin();
   if (r.error) return r.error;
-  const list = db.select().from(channels).orderBy(desc(channels.priority), desc(channels.id)).all();
+  // ?archived=1 查看归档渠道，默认只看未归档
+  const archived = new URL(req.url).searchParams.get("archived") === "1" ? 1 : 0;
+  const list = db
+    .select()
+    .from(channels)
+    .where(eq(channels.archived, archived))
+    .orderBy(desc(channels.priority), desc(channels.id))
+    .all();
   return Response.json({
     data: list.map((c) => ({ ...c, apiKeyEnc: undefined, hasKey: true })),
   });
@@ -59,7 +66,8 @@ export async function POST(req: Request) {
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
-  const id = db
+  // returning() 本身返回 { id } 对象，这里取平避免响应嵌套成 { id: { id } }
+  const row = db
     .insert(channels)
     .values({
       name: body.name,
@@ -75,5 +83,5 @@ export async function POST(req: Request) {
     })
     .returning({ id: channels.id })
     .get();
-  return Response.json({ id });
+  return Response.json({ id: row.id });
 }

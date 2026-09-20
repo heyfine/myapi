@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { channels } from "@/lib/schema";
 import { authenticateGatewayToken } from "@/lib/gateway/token-auth";
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const rows = db
     .select({ models: channels.models })
     .from(channels)
-    .where(eq(channels.status, 1))
+    .where(and(eq(channels.status, 1), eq(channels.archived, 0)))
     .all();
   const modelSet = new Set<string>();
   for (const r of rows) {
