@@ -75,17 +75,36 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
   return groups.sort((a, b) => (a.key === UNGROUPED_LABEL ? -1 : b.key === UNGROUPED_LABEL ? 1 : 0));
 }
 
-/** 分组卡片头部：组名 + 渠道数 + 启用数，供应商组用靛蓝点缀，未分组用中性灰 */
-function groupHeader(g: ChannelGroup) {
+/** 分组卡片头部：可点击折叠/展开；组名 + 渠道数 + 启用数，供应商组用靛蓝点缀，未分组用中性灰 */
+function groupHeader(g: ChannelGroup, isCollapsed: boolean, onToggle: () => void) {
   const isUngrouped = g.key === UNGROUPED_LABEL;
   const enabled = g.channels.filter((c) => c.status).length;
   return (
-    <div className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
+    <button
+      type="button"
+      className={`flex w-full items-center gap-2.5 px-4 py-3 text-left cursor-pointer transition-colors hover:bg-gray-50/80 ${
+        isCollapsed ? "" : "border-b border-gray-100"
+      }`}
+      onClick={onToggle}
+      aria-expanded={!isCollapsed}
+      title={isCollapsed ? "展开分组" : "折叠分组"}
+    >
+      <span
+        className={`inline-block h-2.5 w-2.5 shrink-0 border-r-2 border-b-2 border-gray-400 transition-transform ${
+          isCollapsed ? "-rotate-45" : "rotate-45"
+        }`}
+      />
       <span className={`h-4 w-1 rounded-full ${isUngrouped ? "bg-gray-400" : "bg-indigo-500"}`} />
       <span className="text-sm font-semibold text-gray-900">{g.key}</span>
       <span className="badge border border-gray-200 bg-gray-50 text-[11px] text-gray-500">{g.channels.length} 个渠道</span>
-      <span className="badge border border-green-100 bg-green-50 text-[11px] text-green-600">启用 {enabled}</span>
-    </div>
+      {isCollapsed ? (
+        g.channels.length > enabled && (
+          <span className="badge border border-amber-100 bg-amber-50 text-[11px] text-amber-600">停用 {g.channels.length - enabled}</span>
+        )
+      ) : (
+        <span className="badge border border-green-100 bg-green-50 text-[11px] text-green-600">启用 {enabled}</span>
+      )}
+    </button>
   );
 }
 
@@ -145,6 +164,18 @@ export default function ChannelsPage() {
   const [modelSearch, setModelSearch] = useState("");
   /** 模型列表浮窗：值为对应渠道，null = 关闭 */
   const [modelsModal, setModelsModal] = useState<Channel | null>(null);
+  /** 已折叠的分组卡片（按分组名），默认全部展开 */
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  /** 折叠/展开分组卡片 */
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const load = useCallback(() => {
     api<{ data: Channel[] }>(view === "archived" ? "/api/channels?archived=1" : "/api/channels")
@@ -604,11 +635,12 @@ export default function ChannelsPage() {
       <div className="space-y-4">
         {groupChannels(list).map((g) => (
           <div key={g.key} className="card !p-0 overflow-hidden">
-            {groupHeader(g)}
-            {groupTable(
-              g,
-              ["名称", "接入点", "模型", "优先级", "状态", "测试", "操作"],
-              (c) => (
+            {groupHeader(g, collapsedGroups.has(g.key), () => toggleGroup(g.key))}
+            {!collapsedGroups.has(g.key) &&
+              groupTable(
+                g,
+                ["名称", "接入点", "模型", "优先级", "状态", "测试", "操作"],
+                (c) => (
               <tr key={c.id}>
                 <td className="td">
                   <div className="font-semibold text-gray-900">
@@ -673,8 +705,8 @@ export default function ChannelsPage() {
                   </button>
                 </td>
               </tr>
-              ),
-            )}
+                ),
+              )}
           </div>
         ))}
       </div>
@@ -686,11 +718,12 @@ export default function ChannelsPage() {
       <div className="space-y-4">
         {groupChannels(list).map((g) => (
           <div key={g.key} className="card !p-0 overflow-hidden">
-            {groupHeader(g)}
-            {groupTable(
-              g,
-              ["名称", "接入点", "模型", "优先级", "状态", "测试", "归档时间", "操作"],
-              (c) => (
+            {groupHeader(g, collapsedGroups.has(g.key), () => toggleGroup(g.key))}
+            {!collapsedGroups.has(g.key) &&
+              groupTable(
+                g,
+                ["名称", "接入点", "模型", "优先级", "状态", "测试", "归档时间", "操作"],
+                (c) => (
               <tr key={c.id}>
                 <td className="td">
                   <div className="font-semibold text-gray-900">
@@ -753,8 +786,8 @@ export default function ChannelsPage() {
                   </button>
                 </td>
               </tr>
-              ),
-            )}
+                ),
+              )}
           </div>
         ))}
       </div>
