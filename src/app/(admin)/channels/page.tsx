@@ -75,29 +75,37 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
   return groups.sort((a, b) => (a.key === UNGROUPED_LABEL ? -1 : b.key === UNGROUPED_LABEL ? 1 : 0));
 }
 
-/** 分组渲染：2 个及以上的组插入全宽分组标题行；「未分组」即使只有 1 个渠道也显示标题 */
-function renderGrouped(list: Channel[], colSpan: number, renderRow: (c: Channel) => ReactNode): ReactNode[] {
-  return groupChannels(list).flatMap((g) =>
-    g.channels.length >= 2 || g.key === UNGROUPED_LABEL
-      ? [
-          <tr key={`group:${g.key}`} className={g.key === UNGROUPED_LABEL ? "bg-gray-50" : "bg-indigo-50/60"}>
-            <td colSpan={colSpan} className="px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className={`h-4 w-1 rounded-full ${g.key === UNGROUPED_LABEL ? "bg-gray-400" : "bg-indigo-500"}`} />
-                <span className="text-sm font-semibold text-gray-800">{g.key}</span>
-                <span
-                  className={`badge border text-[11px] ${
-                    g.key === UNGROUPED_LABEL ? "border-gray-200 bg-white text-gray-500" : "border-indigo-100 bg-white text-indigo-500"
-                  }`}
-                >
-                  {g.channels.length} 个渠道
-                </span>
-              </div>
-            </td>
-          </tr>,
-          ...g.channels.map(renderRow),
-        ]
-      : g.channels.map(renderRow),
+/** 分组卡片头部：组名 + 渠道数 + 启用数，供应商组用靛蓝点缀，未分组用中性灰 */
+function groupHeader(g: ChannelGroup) {
+  const isUngrouped = g.key === UNGROUPED_LABEL;
+  const enabled = g.channels.filter((c) => c.status).length;
+  return (
+    <div className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
+      <span className={`h-4 w-1 rounded-full ${isUngrouped ? "bg-gray-400" : "bg-indigo-500"}`} />
+      <span className="text-sm font-semibold text-gray-900">{g.key}</span>
+      <span className="badge border border-gray-200 bg-gray-50 text-[11px] text-gray-500">{g.channels.length} 个渠道</span>
+      <span className="badge border border-green-100 bg-green-50 text-[11px] text-green-600">启用 {enabled}</span>
+    </div>
+  );
+}
+
+/** 分组卡片表格：列定义由调用方传入，正常列表与归档页共用 */
+function groupTable(g: ChannelGroup, columns: string[], renderRow: (c: Channel) => ReactNode) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px]">
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <th key={col} className="th">
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{g.channels.map(renderRow)}</tbody>
+      </table>
+    </div>
   );
 }
 
@@ -590,21 +598,17 @@ export default function ChannelsPage() {
       )}
 
       {view === "active" ? (
-      <div className="card overflow-x-auto">
-        <table className="w-full min-w-[900px]">
-          <thead>
-            <tr>
-              <th className="th">名称</th>
-              <th className="th">接入点</th>
-              <th className="th">模型</th>
-              <th className="th">优先级</th>
-              <th className="th">状态</th>
-              <th className="th">测试</th>
-              <th className="th">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {renderGrouped(list, 7, (c) => (
+      list.length === 0 ? (
+        <div className="card py-12 text-center text-gray-400">还没有渠道，点击右上角"新建渠道"添加第一个供应商</div>
+      ) : (
+      <div className="space-y-4">
+        {groupChannels(list).map((g) => (
+          <div key={g.key} className="card !p-0 overflow-hidden">
+            {groupHeader(g)}
+            {groupTable(
+              g,
+              ["名称", "接入点", "模型", "优先级", "状态", "测试", "操作"],
+              (c) => (
               <tr key={c.id}>
                 <td className="td">
                   <div className="font-semibold text-gray-900">
@@ -669,34 +673,24 @@ export default function ChannelsPage() {
                   </button>
                 </td>
               </tr>
-            ))}
-            {list.length === 0 && (
-              <tr>
-                <td className="td py-12 text-center text-gray-400" colSpan={7}>
-                  还没有渠道，点击右上角"新建渠道"添加第一个供应商
-                </td>
-              </tr>
+              ),
             )}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
+      )
       ) : (
-      <div className="card overflow-x-auto">
-        <table className="w-full min-w-[900px]">
-          <thead>
-            <tr>
-              <th className="th">名称</th>
-              <th className="th">接入点</th>
-              <th className="th">模型</th>
-              <th className="th">优先级</th>
-              <th className="th">状态</th>
-              <th className="th">测试</th>
-              <th className="th">归档时间</th>
-              <th className="th">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {renderGrouped(list, 8, (c) => (
+      list.length === 0 ? (
+        <div className="card py-12 text-center text-gray-400">暂无归档渠道</div>
+      ) : (
+      <div className="space-y-4">
+        {groupChannels(list).map((g) => (
+          <div key={g.key} className="card !p-0 overflow-hidden">
+            {groupHeader(g)}
+            {groupTable(
+              g,
+              ["名称", "接入点", "模型", "优先级", "状态", "测试", "归档时间", "操作"],
+              (c) => (
               <tr key={c.id}>
                 <td className="td">
                   <div className="font-semibold text-gray-900">
@@ -759,17 +753,12 @@ export default function ChannelsPage() {
                   </button>
                 </td>
               </tr>
-            ))}
-            {list.length === 0 && (
-              <tr>
-                <td className="td py-12 text-center text-gray-400" colSpan={8}>
-                  暂无归档渠道
-                </td>
-              </tr>
+              ),
             )}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
+      )
       )}
 
       {form && (
