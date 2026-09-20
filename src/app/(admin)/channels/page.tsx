@@ -7,6 +7,7 @@ import ChannelModelsModal from "@/components/ChannelModelsModal";
 type Channel = {
   id: number;
   name: string;
+  supplier: string;
   type: string;
   baseUrl: string;
   models: string;
@@ -29,8 +30,8 @@ const TYPE_LABELS: Record<string, string> = {
   gemini: "Google Gemini",
 };
 
-/** 渠道分组键：剥掉名称尾部的序号/版本号（如 商汤-02、商汤（1）、商汤 v2），剩余前缀相同的归为一组 */
-function groupKey(name: string): string {
+/** 渠道分组键：优先用供应商字段；未填则剥掉名称尾部的序号/版本号（如 商汤-02、商汤（1）、商汤 v2），剩余前缀相同的归为一组 */
+export function groupKey(name: string): string {
   const original = name.trim();
   let key = original;
   for (;;) {
@@ -52,7 +53,8 @@ function groupChannels(list: Channel[]): ChannelGroup[] {
   const groups: ChannelGroup[] = [];
   const indexOf = new Map<string, number>();
   for (const c of list) {
-    const key = groupKey(c.name);
+    // 分组优先级：显式供应商 > 名称前缀启发式；groupKey 返回的字符串同时用作标题行显示名
+    const key = c.supplier?.trim() || groupKey(c.name);
     const i = indexOf.get(key);
     if (i === undefined) {
       indexOf.set(key, groups.length);
@@ -85,6 +87,7 @@ function renderGrouped(list: Channel[], renderRow: (c: Channel) => ReactNode): R
 const emptyForm = {
   id: 0,
   name: "",
+  supplier: "",
   type: "openai-compatible",
   baseUrl: "",
   apiKey: "",
@@ -161,6 +164,7 @@ export default function ChannelsPage() {
       }
       const payload = {
         name: form.name,
+        supplier: form.supplier.trim(),
         type: form.type,
         baseUrl: form.baseUrl,
         apiKey: form.apiKey || undefined,
@@ -346,6 +350,7 @@ export default function ChannelsPage() {
     setForm({
       id: 0,
       name: `${c.name} 副本`,
+      supplier: c.supplier ?? "",
       type: c.type,
       baseUrl: c.baseUrl,
       apiKey,
@@ -378,6 +383,7 @@ export default function ChannelsPage() {
     setForm({
       id: c.id,
       name: c.name,
+      supplier: c.supplier ?? "",
       type: c.type,
       baseUrl: c.baseUrl,
       apiKey: "",
@@ -577,7 +583,10 @@ export default function ChannelsPage() {
           <tbody>
             {renderGrouped(list, (c) => (
               <tr key={c.id}>
-                <td className="td font-medium">{c.name}</td>
+                <td className="td font-medium">
+                  {c.name}
+                  {c.supplier && <span className="badge ml-1.5 bg-indigo-50 text-indigo-500">{c.supplier}</span>}
+                </td>
                 <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
                 <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
                   {c.baseUrl}
@@ -670,7 +679,10 @@ export default function ChannelsPage() {
           <tbody>
             {renderGrouped(list, (c) => (
               <tr key={c.id}>
-                <td className="td font-medium">{c.name}</td>
+                <td className="td font-medium">
+                  {c.name}
+                  {c.supplier && <span className="badge ml-1.5 bg-indigo-50 text-indigo-500">{c.supplier}</span>}
+                </td>
                 <td className="td">{TYPE_LABELS[c.type] ?? c.type}</td>
                 <td className="td font-mono text-xs max-w-[220px] truncate" title={c.baseUrl}>
                   {c.baseUrl}
@@ -748,6 +760,15 @@ export default function ChannelsPage() {
             <div>
               <label className="label">名称</label>
               <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如 DeepSeek 官方" />
+            </div>
+            <div>
+              <label className="label">供应商（可选，用于分组展示）</label>
+              <input
+                className="input"
+                value={form.supplier}
+                onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                placeholder="如 商汤；同名供应商的渠道会归入同一分组，留空则按名称自动分组"
+              />
             </div>
             <div>
               <label className="label">类型</label>

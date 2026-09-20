@@ -36,6 +36,7 @@ export async function GET() {
       }
       return {
         name: c.name,
+        supplier: c.supplier,
         type: c.type,
         baseUrl: c.baseUrl,
         apiKey,

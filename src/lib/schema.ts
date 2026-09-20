@@ -16,6 +16,7 @@ export const users = sqliteTable("users", {
 export const channels = sqliteTable("channels", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  supplier: text("supplier").notNull().default(""), // 供应商：用于渠道分组展示，空则按名称前缀自动分组
   type: text("type").notNull(), // openai | openai-compatible | anthropic | gemini
   baseUrl: text("base_url").notNull(),
   apiKeyEnc: text("api_key_enc").notNull(), // AES-256-GCM 密文

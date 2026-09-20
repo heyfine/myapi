@@ -71,6 +71,7 @@ export async function POST(req: Request) {
     .insert(channels)
     .values({
       name: body.name,
+      supplier: String(body.supplier ?? "").trim(),
       type: body.type,
       baseUrl: body.baseUrl.replace(/\/+$/, ""),
       apiKeyEnc: encryptSecret(body.apiKey),

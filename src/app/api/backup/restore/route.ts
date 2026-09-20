@@ -5,6 +5,7 @@ import { encryptSecret } from "@/lib/crypto";
 
 interface BackupChannel {
   name: string;
+  supplier?: string;
   type: string;
   baseUrl: string;
   apiKey: string;
@@ -141,6 +142,8 @@ export async function POST(req: Request) {
       tx.insert(channels)
         .values({
           name: c.name,
+          // 旧备份无该字段视为空（分组回退名称前缀）
+          supplier: c.supplier ?? "",
           type: c.type,
           baseUrl: c.baseUrl.replace(/\/+$/, ""),
           apiKeyEnc: encryptSecret(c.apiKey ?? ""),

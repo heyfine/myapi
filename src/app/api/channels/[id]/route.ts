@@ -41,6 +41,7 @@ export async function PUT(req: Request, ctx: Ctx) {
 
   const updates: Partial<typeof channels.$inferInsert> = {};
   if (body.name) updates.name = body.name;
+  if (body.supplier !== undefined) updates.supplier = String(body.supplier).trim();
   if (body.type) updates.type = body.type;
   if (body.baseUrl) updates.baseUrl = body.baseUrl.replace(/\/+$/, "");
   if (body.apiKey) updates.apiKeyEnc = encryptSecret(body.apiKey); // 留空表示不修改

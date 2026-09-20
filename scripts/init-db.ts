@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS channels (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
+  supplier TEXT NOT NULL DEFAULT '',
   type TEXT NOT NULL,
   base_url TEXT NOT NULL,
   api_key_enc TEXT NOT NULL,
@@ -120,6 +121,10 @@ if (!channelCols.includes("model_mapping")) {
 if (!channelCols.includes("proxy")) {
   db.exec("ALTER TABLE channels ADD COLUMN proxy TEXT NOT NULL DEFAULT ''");
   console.log("已迁移: channels 增加 proxy 列");
+}
+if (!channelCols.includes("supplier")) {
+  db.exec("ALTER TABLE channels ADD COLUMN supplier TEXT NOT NULL DEFAULT ''");
+  console.log("已迁移: channels 增加 supplier 列");
 }
 if (!channelCols.includes("archived")) {
   db.exec("ALTER TABLE channels ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
